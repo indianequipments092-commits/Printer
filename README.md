@@ -1,44 +1,41 @@
 # PrintBridge
 
-PrintBridge is a high-performance, extensible print-and-scan bridge designed to connect mobile, desktop, USB and network printers/scanners through a unified workflow.
+PrintBridge is a local-first, extensible print-and-scan bridge designed to connect mobile, desktop, USB and network printers/scanners through a unified workflow.
 
 ## Stage 1 — Foundation
 
-Stage 1 establishes the architecture and product contract for:
+Stage 1 establishes the architecture and product contract for USB/wireless transport, mobile Scan workflows, desktop/CLI jobs, capability negotiation, scan settings, multi-page output, print/scan job state, adapter boundaries and local-first security.
 
-- USB and wireless/network printer discovery and communication
-- Mobile-initiated scanning with preview and scan profiles
-- Desktop/CLI initiated scanning with the same normalized job model
-- Brightness, contrast, DPI/resolution, color mode, paper size, orientation and quality controls
-- Automatic crop, deskew and image enhancement as capability permits
-- Single-page and multi-page scanning
-- JPEG, PNG and PDF output
-- Print job submission, queueing, status, cancellation and retry
-- Capability detection so unsupported device features are never falsely exposed
-- Device adapters/drivers isolated behind stable interfaces
-- Local-first operation with optional cloud features kept outside the device core
-- Security boundaries, permissions, diagnostics and structured logging
+## Stage 2 + 3 + 4 — Device Engine + Wireless + Mobile
 
-## Product principle
+This combined stage adds the shared implementation foundation for:
 
-PrintBridge should behave consistently whether a job starts from a mobile Scan button, a desktop command, or a network-connected workflow. Device-specific protocols belong in adapters; the application layer consumes normalized capabilities and job results.
+- Device registry and discovery providers
+- USB/wired transport boundary with explicit permission and disconnect states
+- Wireless/network transport boundary
+- Capability-aware scan profile normalization
+- Brightness, contrast, DPI, color mode, paper size, orientation and quality controls
+- Duplex, auto-crop and deskew capability handling
+- Composable image-processing pipeline
+- JPEG/PNG/PDF export boundary
+- Multi-page scan page model
+- Mobile one-tap Scan workflow, preview and export UX boundary
+- Clear unsupported-device and recoverable-error states
 
-## Planned architecture
+## Hardware reality rule
 
-`clients/` → mobile/desktop user experiences
+The shared foundation is deliberately separated from native hardware code. Real USB scanning and wireless scanning require a compatible Android/native transport plus a scanner/printer protocol adapter. PrintBridge must never fake hardware support; a device is marked supported only after its protocol/capabilities are actually available and validated.
+
+## Architecture
+
+`clients/` → mobile/desktop experiences
 
 `core/` → normalized device, scan and print domain contracts
 
-`adapters/` → USB/network/vendor-specific integrations
+`transports/` → USB/wired and wireless connection boundaries
 
-`processing/` → image/PDF post-processing pipeline
+`adapters/` → vendor/protocol integrations
 
-`transport/` → discovery, connection and job transport
+`core/scan-pipeline.ts` → image processing and export orchestration
 
-`diagnostics/` → logs, health checks and troubleshooting
-
-`docs/` → architecture, compatibility and implementation decisions
-
-## Important compatibility note
-
-USB and wireless scanning are possible, but exact capabilities depend on the scanner/printer model and protocol. PrintBridge therefore uses capability negotiation and adapter-based integrations rather than assuming every device supports every feature.
+`docs/` → architecture, compatibility and stage checklists
