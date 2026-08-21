@@ -8,23 +8,25 @@ Stage 1 establishes the architecture and product contract for USB/wireless trans
 
 ## Stage 2 + 3 + 4 — Device Engine + Wireless + Mobile
 
-This combined stage adds the shared implementation foundation for:
+This combined stage adds the shared implementation foundation for device registry/discovery, USB/wired permission states, wireless/network boundaries, capability-aware scan profiles, brightness/contrast/DPI/color/paper/orientation/quality controls, duplex, auto-crop, deskew, image processing, JPEG/PNG/PDF export, multi-page scanning and mobile Scan/preview/export flows.
 
-- Device registry and discovery providers
-- USB/wired transport boundary with explicit permission and disconnect states
-- Wireless/network transport boundary
-- Capability-aware scan profile normalization
-- Brightness, contrast, DPI, color mode, paper size, orientation and quality controls
-- Duplex, auto-crop and deskew capability handling
-- Composable image-processing pipeline
-- JPEG/PNG/PDF export boundary
-- Multi-page scan page model
-- Mobile one-tap Scan workflow, preview and export UX boundary
-- Clear unsupported-device and recoverable-error states
+## Stage 5 — Desktop / PC Engine
+
+Adds desktop job orchestration, queue lifecycle, cancellation, CLI command contracts and desktop provider boundaries.
+
+## Stage 6–8 — Final Mega Stage
+
+Adds advanced print/scan job contracts, scan settings validation, processing/output contracts, reliability and security boundaries, structured errors, retry/cancellation rules, compatibility matrices, deterministic validation tests, release documentation and final acceptance checklists.
 
 ## Hardware reality rule
 
-The shared foundation is deliberately separated from native hardware code. Real USB scanning and wireless scanning require a compatible Android/native transport plus a scanner/printer protocol adapter. PrintBridge must never fake hardware support; a device is marked supported only after its protocol/capabilities are actually available and validated.
+The shared foundation is deliberately separated from native hardware code. Real USB scanning and wireless scanning require compatible native transports and scanner/printer protocol adapters. PrintBridge must never fake hardware support; a device is marked supported only after its protocol/capabilities are actually available and validated.
+
+## Core workflows
+
+**Mobile:** Scan → discover USB/wireless device → negotiate capabilities → apply scan settings → preview/process → export image/PDF.
+
+**PC:** command → discover/select device → scan/print job → progress → result/history.
 
 ## Architecture
 
@@ -36,6 +38,6 @@ The shared foundation is deliberately separated from native hardware code. Real 
 
 `adapters/` → vendor/protocol integrations
 
-`core/scan-pipeline.ts` → image processing and export orchestration
-
 `docs/` → architecture, compatibility and stage checklists
+
+'tests/' → deterministic validation tests
