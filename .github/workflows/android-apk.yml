@@ -36,6 +36,11 @@ jobs:
           test -f eas.json
           node -e "const p=require('./eas.json'); if(!p.build?.preview?.android || p.build.preview.android.buildType !== 'apk') process.exit(1)"
 
+      - name: Initialize EAS project
+        run: npx eas-cli@latest init --account indianequipments092 --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
       - name: Build Android APK with Expo/EAS
         run: npx eas-cli@latest build --platform android --profile preview --non-interactive --no-wait
         env:
