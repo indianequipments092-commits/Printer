@@ -1,0 +1,9 @@
+{
+  "expo": {
+    "name": "PrintBridge",
+    "slug": "printbridge",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "android": {"package": "com.printbridge.mobile", "permissions": ["android.permission.BLUETOOTH_CONNECT", "android.permission.BLUETOOTH_SCAN", "android.permission.ACCESS_NETWORK_STATE", "android.permission.ACCESS_WIFI_STATE"]}
+  }
+}
