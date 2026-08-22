@@ -58,8 +58,8 @@ class PdfReaderActivity : Activity() {
         pageLabel = TextView(this).apply { text="Page — / —"; textSize=13f; setTextColor(Color.rgb(170,185,205)) }
         zoomLabel = TextView(this).apply { text="100%"; textSize=13f; setTextColor(Color.rgb(170,185,205)) }
         info.addView(pageLabel, LinearLayout.LayoutParams(0,-2,1f)); info.addView(zoomLabel); root.addView(info)
-        val scroll = ScrollView(this).apply { fillViewport=true; setBackgroundColor(Color.rgb(18,24,34)) }
-        val center = FrameLayout(this).apply { setPadding(dp(8),dp(8),dp(8),dp(8)); gravity=Gravity.CENTER }
+        val scroll = ScrollView(this).apply { setFillViewport(true); setBackgroundColor(Color.rgb(18,24,34)) }
+        val center = FrameLayout(this).apply { setPadding(dp(8),dp(8),dp(8),dp(8)) }
         pageImage = ImageView(this).apply { adjustViewBounds=true; scaleType=ImageView.ScaleType.FIT_CENTER; setBackgroundColor(Color.WHITE) }
         center.addView(pageImage, FrameLayout.LayoutParams(-1,-2,Gravity.CENTER))
         loading = ProgressBar(this).apply { visibility=View.GONE }
