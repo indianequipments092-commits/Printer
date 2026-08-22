@@ -3,6 +3,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 MAIN = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt"
 LIB = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/ScanLibrary.kt"
+PRINTEX = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/PrintExActivity.kt"
 
 
 def sub(path, old, new):
@@ -11,7 +12,7 @@ def sub(path, old, new):
         path.write_text(s.replace(old, new, 1), encoding="utf-8")
         print("applied:", path.name)
     else:
-        print("skip:", path.name, old[:50].replace("\n", " "))
+        print("skip:", path.name, old[:60].replace("\n", " "))
 
 # Keep all main-screen content safely below the Android status/camera area.
 sub(MAIN, "setPadding(dp(18), dp(16), dp(18), dp(18))", "setPadding(dp(18), dp(40), dp(18), dp(18))")
@@ -23,10 +24,14 @@ sub(
     '        navButton("▦", "Library", 2)\n        navButton("▣", "Printex", 3)\n'
 )
 sub(MAIN, "            else -> renderTools()\n", "            else -> { /* Printex is a dedicated Activity */ }\n")
+
+# IMPORTANT: qualify the Activity receiver explicitly. Inside the click-listener
+# lambda Kotlin can resolve `this` to the wrong receiver, producing the
+# Intent(String, Uri) constructor error seen during compilation.
 sub(
     MAIN,
     "            setOnClickListener { renderTab(tab) }",
-    "            setOnClickListener { if (tab == 3) startActivity(Intent(this, PrintExActivity::class.java)) else renderTab(tab) }"
+    "            setOnClickListener { if (tab == 3) startActivity(Intent(this@MainActivity, PrintExActivity::class.java)) else renderTab(tab) }"
 )
 
 # Preserve brightness/contrast/grayscale choices in the actual scanned image.
@@ -65,6 +70,17 @@ if old in s:
 else:
     print("skip: final scan image processing")
 MAIN.write_text(s, encoding="utf-8")
+
+# Make the same receiver qualification explicit in Printex's Scan shortcut.
+if PRINTEX.exists():
+    p = PRINTEX.read_text(encoding="utf-8")
+    old_intent = "Intent(this, MainActivity::class.java)"
+    new_intent = "Intent(this@PrintExActivity, MainActivity::class.java)"
+    if old_intent in p:
+        PRINTEX.write_text(p.replace(old_intent, new_intent), encoding="utf-8")
+        print("applied: PrintExActivity Intent receiver")
+    else:
+        print("skip: PrintExActivity Intent receiver")
 
 # 1.0 is the neutral contrast value.
 sub(LIB, "val c = (contrast + 1f).coerceAtLeast(0.05f)", "val c = contrast.coerceAtLeast(0.05f)")
