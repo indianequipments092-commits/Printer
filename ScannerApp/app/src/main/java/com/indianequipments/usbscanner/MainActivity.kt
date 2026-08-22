@@ -88,7 +88,7 @@ class MainActivity : Activity() {
         }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(16), dp(18), dp(18))
+            setPadding(dp(18), dp(38), dp(18), dp(18))
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -126,7 +126,7 @@ class MainActivity : Activity() {
 
     private fun renderHome() {
         content.addView(title("USB SCANNER", "MAHA ADVANCED+ • PROFESSIONAL SCAN STUDIO"), LinearLayout.LayoutParams(-1, -2).apply {
-            setMargins(0, dp(24), 0, 0)
+            setMargins(0, dp(10), 0, 0)
         })
         val deviceCard = card()
         deviceCard.addView(TextView(this).apply {
