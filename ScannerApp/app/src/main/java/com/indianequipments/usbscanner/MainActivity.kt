@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     private var progress: ProgressBar? = null
     private var progressText: TextView? = null
     private var previewBitmap: Bitmap? = null
+    private var pendingTempPdf: File? = null
 
     private val PDF_FOLDER_REQUEST = 7001
     private val prefs by lazy { getSharedPreferences("scanner_prefs", MODE_PRIVATE) }
@@ -97,10 +98,10 @@ class MainActivity : Activity() {
         nav = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
+            setPadding(dp(8), dp(6), dp(8), dp(6))
             background = panel()
         }
-        root.addView(nav, LinearLayout.LayoutParams(-1, dp(74)))
+        root.addView(nav, LinearLayout.LayoutParams(-1, dp(82)))
         setContentView(root)
         renderTab(0)
     }
@@ -143,10 +144,9 @@ class MainActivity : Activity() {
             setTextColor(Color.rgb(120,136,158))
             setPadding(0,dp(4),0,0)
         })
-        val connect = actionButton(if (device == null) "CONNECT SCANNER" else "REFRESH USB") {
+        deviceCard.addView(actionButton(if (device == null) "CONNECT SCANNER" else "REFRESH USB") {
             if (device == null) requestScanner() else refreshUsb()
-        }
-        deviceCard.addView(connect, LinearLayout.LayoutParams(-1, dp(48)).apply { setMargins(0,dp(14),0,0) })
+        }, LinearLayout.LayoutParams(-1, dp(48)).apply { setMargins(0,dp(14),0,0) })
         content.addView(deviceCard, margin(0,10))
 
         val hero = card()
@@ -231,11 +231,7 @@ class MainActivity : Activity() {
         settings.addView(section("SCAN SETTINGS"))
         val srow = row()
         dpiSpinner = Spinner(this).apply {
-            adapter = object : ArrayAdapter<String>(
-                this@MainActivity,
-                android.R.layout.simple_spinner_item,
-                listOf("150 DPI", "300 DPI", "600 DPI")
-            ) {
+            adapter = object : ArrayAdapter<String>(this@MainActivity, android.R.layout.simple_spinner_item, listOf("150 DPI", "300 DPI", "600 DPI")) {
                 override fun getView(position: Int, convertView: View?, parent: android.view.ViewGroup): View {
                     val v = super.getView(position, convertView, parent) as TextView
                     v.setTextColor(Color.WHITE)
@@ -283,15 +279,8 @@ class MainActivity : Activity() {
         scanRow.addView(scanButton, weight(1f,4))
         content.addView(scanRow, margin(0,10))
 
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            visibility = View.GONE
-        }
-        progressText = TextView(this).apply {
-            textSize = 12f
-            setTextColor(Color.rgb(150,165,185))
-            visibility = View.GONE
-        }
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = View.GONE }
+        progressText = TextView(this).apply { textSize = 12f; setTextColor(Color.rgb(150,165,185)); visibility = View.GONE }
         content.addView(progress)
         content.addView(progressText)
 
@@ -313,14 +302,11 @@ class MainActivity : Activity() {
             val strip = HorizontalScrollView(this)
             val stripRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             pages.forEachIndexed { i, bmp ->
-                stripRow.addView(
-                    thumbnail(bmp, i == currentPage) {
-                        currentPage = i
-                        previewBitmap = null
-                        updatePreview()
-                    },
-                    LinearLayout.LayoutParams(dp(92), dp(120)).apply { setMargins(dp(4),dp(4),dp(4),dp(4)) }
-                )
+                stripRow.addView(thumbnail(bmp, i == currentPage) {
+                    currentPage = i
+                    previewBitmap = null
+                    updatePreview()
+                }, LinearLayout.LayoutParams(dp(92), dp(120)).apply { setMargins(dp(4),dp(4),dp(4),dp(4)) })
             }
             strip.addView(stripRow)
             content.addView(strip)
@@ -347,32 +333,112 @@ class MainActivity : Activity() {
         }, weight(1f,4))
         controls.addView(tile("↕", "Newest") { renderTab(2) }, weight(1f,4))
         controls.addView(tile("⌗", "Grid/List") { renderTab(2) }, weight(1f,4))
-        controls.addView(tile("↗", "Share") { shareSelected() }, weight(1f,4))
+        controls.addView(tile("↗", "Share") { showLibraryShareFormatDialog() }, weight(1f,4))
         content.addView(controls, margin(0,8))
         val list = library.list().filter { search.text.isNullOrBlank() || it.name.contains(search.text.toString(), true) }
         if (list.isEmpty()) content.addView(emptyCard("Library is empty", "Scan a page and it will be saved here automatically."))
         list.forEach { file -> content.addView(fileRow(file, true), margin(0,8)) }
-        if (selectedLibrary.isNotEmpty()) content.addView(actionButton("EXPORT ${selectedLibrary.size} SELECTED") { exportSelected() }, margin(0,12))
+        if (selectedLibrary.isNotEmpty()) content.addView(actionButton("EXPORT ${selectedLibrary.size} SELECTED") { showLibraryShareFormatDialog() }, margin(0,12))
     }
 
     private fun renderTools() {
         content.addView(title("TOOLS", "EXPORT • PDF STUDIO • RECOVERY • SETTINGS"))
-        val items = listOf(
-            "PDF Studio" to "Create, merge, reorder, rotate and compress PDFs",
-            "Image Editor" to "Crop, rotate, brightness, contrast, grayscale and enhance",
-            "Export Center" to "PDF • JPG • JPEG • PNG • Share",
-            "OCR" to "Offline-ready text extraction layer",
-            "History & Recovery" to "Interrupted sessions and USB disconnect recovery",
-            "Privacy" to "Local-first storage • no automatic upload"
-        )
-        items.forEach { (a,b) ->
-            val c = card()
-            c.addView(TextView(this).apply { text = a; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
-            c.addView(TextView(this).apply { text = b; textSize = 12f; setTextColor(Color.rgb(135,150,170)); setPadding(0,dp(5),0,0) })
-            content.addView(c, margin(0,8))
-        }
+        toolCard("PDF Studio", "Merge, reorder, rotate, compress and create PDFs") { showPdfStudio() }
+        toolCard("Image Editor", "Brightness, contrast, rotate, grayscale, auto enhance and reset") { showImageEditor() }
+        toolCard("Export Center", "Choose PDF • JPG • JPEG • PNG and share") { showShareFormatDialog() }
+        toolCard("OCR", "Text extraction entry point for scanned pages") { showOcrInfo() }
+        toolCard("History & Recovery", "Review local scans and recover the current interrupted session") { showHistoryRecovery() }
+        toolCard("Privacy", "Local-first storage • no automatic upload") { showPrivacy() }
         content.addView(actionButton("START NEW DOCUMENT") { newDocument() }, margin(0,12))
         content.addView(actionButton("REFRESH SCANNER") { refreshUsb() })
+    }
+
+    private fun toolCard(title: String, subtitle: String, action: () -> Unit) {
+        val c = card().apply {
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { action() }
+        }
+        c.addView(TextView(this).apply { text = title; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+        c.addView(TextView(this).apply { text = subtitle; textSize = 12f; setTextColor(Color.rgb(135,150,170)); setPadding(0,dp(5),0,0) })
+        c.addView(TextView(this).apply { text = "TAP TO OPEN  ›"; textSize = 10f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(85,160,255)); setPadding(0,dp(10),0,0) })
+        content.addView(c, margin(0,8))
+    }
+
+    private fun showPdfStudio() {
+        AlertDialog.Builder(this).setTitle("PDF Studio • Advanced")
+            .setItems(arrayOf("Create PDF from current document", "Merge selected library scans into PDF", "Rotate current page", "Reorder pages")) { _, which ->
+                when (which) {
+                    0 -> savePdf()
+                    1 -> exportSelectedPdf()
+                    2 -> rotatePage()
+                    3 -> showReorderDialog()
+                }
+            }.show()
+    }
+
+    private fun showImageEditor() {
+        AlertDialog.Builder(this).setTitle("Image Editor • Advanced")
+            .setItems(arrayOf("Brightness / Contrast", "Rotate 90°", "Grayscale", "Auto Enhance", "Reset edits")) { _, which ->
+                when (which) {
+                    0 -> renderTab(1)
+                    1 -> rotatePage()
+                    2 -> grayPage()
+                    3 -> autoEnhance()
+                    4 -> resetEdits()
+                }
+            }.show()
+    }
+
+    private fun showOcrInfo() {
+        AlertDialog.Builder(this)
+            .setTitle("OCR")
+            .setMessage("OCR entry is available here. The current project does not include an OCR engine, so no fake text result is generated.")
+            .setPositiveButton("OPEN SCAN STUDIO") { _, _ -> renderTab(1) }
+            .setNegativeButton("CLOSE", null)
+            .show()
+    }
+
+    private fun showHistoryRecovery() {
+        val files = library.list()
+        val message = if (files.isEmpty()) "No saved scans yet. Your local library will appear here after scanning." else "Local scans: ${files.size}\nCurrent document pages: ${pages.size}\n\nUse the Library to reopen saved pages, or Start New Document to clear the current session."
+        AlertDialog.Builder(this).setTitle("History & Recovery").setMessage(message)
+            .setPositiveButton("OPEN LIBRARY") { _, _ -> renderTab(2) }
+            .setNegativeButton("CLOSE", null).show()
+    }
+
+    private fun showPrivacy() {
+        AlertDialog.Builder(this).setTitle("Privacy")
+            .setMessage("Scans are kept in local device storage. This app does not automatically upload your scan files.")
+            .setPositiveButton("OK", null).show()
+    }
+
+    private fun showReorderDialog() {
+        if (pages.size < 2) { setStatus("At least 2 pages are needed to reorder"); return }
+        val labels = pages.indices.map { "Page ${it + 1}" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("Reorder Pages")
+            .setItems(labels) { _, which -> showMovePageDialog(which) }.show()
+    }
+
+    private fun showMovePageDialog(index: Int) {
+        val actions = arrayOf("Move up", "Move down", "Cancel")
+        AlertDialog.Builder(this).setTitle("Page ${index + 1}").setItems(actions) { _, which ->
+            when (which) {
+                0 -> movePage(index, index - 1)
+                1 -> movePage(index, index + 1)
+            }
+        }.show()
+    }
+
+    private fun movePage(from: Int, to: Int) {
+        if (from !in pages.indices || to !in pages.indices) return
+        val b = pages.removeAt(from)
+        pages.add(to, b)
+        val dpi = dpis.removeAt(from)
+        dpis.add(to, dpi)
+        currentPage = to
+        renderTab(1)
+        setStatus("Pages reordered")
     }
 
     private fun scan() {
@@ -405,10 +471,7 @@ class MainActivity : Activity() {
                     renderTab(1)
                 }
             } catch (t: Throwable) {
-                runOnUiThread {
-                    setStatus("Scan failed • ${t.message ?: "Unknown scanner error"}")
-                    finishScan()
-                }
+                runOnUiThread { setStatus("Scan failed • ${t.message ?: "Unknown scanner error"}"); finishScan() }
             }
         }
     }
@@ -480,24 +543,18 @@ class MainActivity : Activity() {
 
     private fun requestScanner() {
         val d = usb.scannerDevices().firstOrNull() ?: run { setStatus("No supported scanner detected"); return }
-        if (usb.hasPermission(d)) connectDevice(d)
-        else {
-            setStatus("Requesting USB access…")
-            usb.requestPermission(d)
-        }
+        if (usb.hasPermission(d)) connectDevice(d) else { setStatus("Requesting USB access…"); usb.requestPermission(d) }
     }
 
     private fun connectDevice(d: UsbDevice) {
         if (!usb.open(d)) {
-            device = null
-            protocol = null
+            device = null; protocol = null
             setStatus("MF3010 USB interface could not be opened")
             return
         }
         val p = ScannerProtocol(usb.connection()!!, usb.usbInterface()!!)
         if (!p.probe().supported) {
-            device = null
-            protocol = null
+            device = null; protocol = null
             setStatus("Scanner transport unavailable")
             return
         }
@@ -563,10 +620,7 @@ class MainActivity : Activity() {
     private fun hasPage() = currentPage in pages.indices
 
     private fun savePdf() {
-        if (pages.isEmpty()) {
-            setStatus("No pages to export")
-            return
-        }
+        if (pages.isEmpty()) { setStatus("No pages to export"); return }
         setStatus("Creating PDF • ${pages.size} pages…")
         executor.execute {
             try {
@@ -592,8 +646,6 @@ class MainActivity : Activity() {
         startActivityForResult(intent, PDF_FOLDER_REQUEST)
     }
 
-    private var pendingTempPdf: File? = null
-
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != PDF_FOLDER_REQUEST || resultCode != RESULT_OK || data?.data == null) {
@@ -605,9 +657,7 @@ class MainActivity : Activity() {
             return
         }
         val treeUri = data.data!!
-        try {
-            contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        } catch (_: Throwable) {}
+        try { contentResolver.takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION) } catch (_: Throwable) {}
         val temp = pendingTempPdf ?: return
         pendingTempPdf = null
         AlertDialog.Builder(this)
@@ -617,14 +667,11 @@ class MainActivity : Activity() {
                 prefs.edit().putString("pdf_tree_uri", treeUri.toString()).putBoolean("pdf_always_use", true).apply()
                 saveFileToTree(treeUri, temp, true)
             }
-            .setNeutralButton("SAVE HERE ONCE") { _, _ ->
-                saveFileToTree(treeUri, temp, false)
-            }
+            .setNeutralButton("SAVE HERE ONCE") { _, _ -> saveFileToTree(treeUri, temp, true) }
             .setNegativeButton("ALWAYS ASK") { _, _ ->
                 prefs.edit().putBoolean("pdf_always_use", false).apply()
-                saveFileToTree(treeUri, temp, false)
-            }
-            .show()
+                saveFileToTree(treeUri, temp, true)
+            }.show()
     }
 
     private fun saveFileToTree(treeUri: Uri, source: File, openAfter: Boolean) {
@@ -642,29 +689,24 @@ class MainActivity : Activity() {
                     setStatus("PDF saved • $name")
                     if (openAfter) openFile(documentUri, "application/pdf")
                 }
-            } catch (t: Throwable) {
-                runOnUiThread { setStatus("PDF save failed • ${t.message ?: "Unknown error"}") }
-            }
+            } catch (t: Throwable) { runOnUiThread { setStatus("PDF save failed • ${t.message ?: "Unknown error"}") } }
         }
     }
 
     private fun showShareFormatDialog() {
-        if (!hasPage() && pages.isEmpty()) {
-            setStatus("No page available to share")
-            return
-        }
+        if (!hasPage() && pages.isEmpty()) { setStatus("No page available to share"); return }
         val options = arrayOf("PDF", "JPG", "JPEG", "PNG")
-        AlertDialog.Builder(this)
-            .setTitle("Share as")
-            .setItems(options) { _, which ->
-                when (which) {
-                    0 -> sharePdf()
-                    1 -> shareImage("jpg")
-                    2 -> shareImage("jpeg")
-                    3 -> shareImage("png")
-                }
-            }
-            .show()
+        AlertDialog.Builder(this).setTitle("Share as").setItems(options) { _, which ->
+            when (which) { 0 -> sharePdf(); 1 -> shareImage("jpg"); 2 -> shareImage("jpeg"); 3 -> shareImage("png") }
+        }.show()
+    }
+
+    private fun showLibraryShareFormatDialog() {
+        if (selectedLibrary.isEmpty()) { setStatus("Select at least one scan first"); return }
+        val options = arrayOf("PDF", "PNG", "JPEG", "JPG")
+        AlertDialog.Builder(this).setTitle("Share selected as").setItems(options) { _, which ->
+            when (which) { 0 -> exportSelectedPdf(); 1 -> exportSelectedImages("png"); 2 -> exportSelectedImages("jpeg"); 3 -> exportSelectedImages("jpg") }
+        }.show()
     }
 
     private fun sharePdf() {
@@ -673,233 +715,161 @@ class MainActivity : Activity() {
             try {
                 val file = document.savePdf(pages, dpis)
                 runOnUiThread { shareFiles(listOf(file), "application/pdf") }
-            } catch (t: Throwable) {
-                runOnUiThread { setStatus("PDF share failed • ${t.message ?: "Unknown error"}") }
-            }
+            } catch (t: Throwable) { runOnUiThread { setStatus("PDF share failed • ${t.message ?: "Unknown error"}") } }
         }
     }
 
     private fun shareImage(format: String) {
-        if (!hasPage()) {
-            setStatus("Select a page first")
-            return
-        }
+        if (!hasPage()) { setStatus("Select a page first"); return }
         executor.execute {
             try {
                 val bmp = processedPreview()
                 val ext = if (format == "png") "png" else "jpg"
                 val mime = if (format == "png") "image/png" else "image/jpeg"
                 val file = File(cacheDir, "USB_Scanner_share_${System.currentTimeMillis()}.$ext")
-                FileOutputStream(file).use { out ->
-                    bmp.compress(if (format == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 95, out)
-                }
+                FileOutputStream(file).use { out -> bmp.compress(if (format == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 95, out) }
                 runOnUiThread { shareFiles(listOf(file), mime) }
+            } catch (t: Throwable) { runOnUiThread { setStatus("Image share failed • ${t.message ?: "Unknown error"}") } }
+        }
+    }
+
+    private fun exportSelectedPdf() {
+        val files = library.list().filter { selectedLibrary.contains(it.absolutePath) }
+        if (files.isEmpty()) { setStatus("No selected scans"); return }
+        executor.execute {
+            val bitmaps = mutableListOf<Bitmap>()
+            try {
+                files.take(50).forEach { library.decode(it)?.let { b -> bitmaps.add(b) } }
+                if (bitmaps.isEmpty()) throw IllegalStateException("Could not read selected scans")
+                val file = document.savePdf(bitmaps, List(bitmaps.size) { 300 })
+                runOnUiThread { shareFiles(listOf(file), "application/pdf") }
             } catch (t: Throwable) {
-                runOnUiThread { setStatus("Image share failed • ${t.message ?: "Unknown error"}") }
-            }
+                runOnUiThread { setStatus("Selected PDF share failed • ${t.message ?: "Unknown error"}") }
+            } finally { bitmaps.forEach { if (!it.isRecycled) it.recycle() } }
+        }
+    }
+
+    private fun exportSelectedImages(format: String) {
+        val files = library.list().filter { selectedLibrary.contains(it.absolutePath) }
+        if (files.isEmpty()) { setStatus("No selected scans"); return }
+        executor.execute {
+            val output = mutableListOf<File>()
+            try {
+                files.take(20).forEach { source ->
+                    val bmp = library.decode(source) ?: return@forEach
+                    val ext = if (format == "png") "png" else format
+                    val mime = if (format == "png") "image/png" else "image/jpeg"
+                    val outFile = File(cacheDir, "USB_Scanner_${System.currentTimeMillis()}_${output.size}.$ext")
+                    FileOutputStream(outFile).use { out -> bmp.compress(if (format == "png") Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG, 95, out) }
+                    if (!bmp.isRecycled) bmp.recycle()
+                    output.add(outFile)
+                    if (output.size == 20) return@forEach
+                }
+                if (output.isEmpty()) throw IllegalStateException("Could not read selected scans")
+                val mime = if (format == "png") "image/png" else "image/jpeg"
+                runOnUiThread { shareFiles(output, mime) }
+            } catch (t: Throwable) { runOnUiThread { setStatus("Image share failed • ${t.message ?: "Unknown error"}") } }
         }
     }
 
     private fun openFile(uri: Uri, mime: String) {
         try {
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, mime)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            startActivity(intent)
-        } catch (t: Throwable) {
-            setStatus("No app available to open this PDF")
-        }
+            startActivity(Intent(Intent.ACTION_VIEW).apply { setDataAndType(uri, mime); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) })
+        } catch (_: Throwable) { setStatus("No app available to open this PDF") }
     }
-
-    private fun exportCurrent() = showShareFormatDialog()
-
-    private fun exportSelected() {
-        val files = library.list().filter { selectedLibrary.contains(it.absolutePath) }
-        if (files.isEmpty()) return
-        shareFiles(files.take(20), "image/jpeg")
-    }
-
-    private fun shareSelected() = exportSelected()
 
     private fun shareFiles(files: List<File>, mime: String) {
         try {
             val uris = ArrayList<Uri>()
             files.forEach { uris.add(FileProvider.getUriForFile(this, "${packageName}.fileprovider", it)) }
-            val intent = if (uris.size == 1) {
-                Intent(Intent.ACTION_SEND).apply {
-                    type = mime
-                    putExtra(Intent.EXTRA_STREAM, uris[0])
-                }
-            } else {
-                Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                    type = mime
-                    putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                }
-            }
+            val intent = if (uris.size == 1) Intent(Intent.ACTION_SEND).apply { type = mime; putExtra(Intent.EXTRA_STREAM, uris[0]) }
+            else Intent(Intent.ACTION_SEND_MULTIPLE).apply { type = mime; putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris) }
             intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             startActivity(Intent.createChooser(intent, "Share scan"))
-        } catch (t: Throwable) {
-            setStatus("Sharing unavailable • ${t.message ?: "No compatible app"}")
-        }
+        } catch (t: Throwable) { setStatus("Sharing unavailable • ${t.message ?: "No compatible app"}") }
     }
 
     private fun newDocument() {
         pages.forEach { if (!it.isRecycled) it.recycle() }
-        pages.clear()
-        dpis.clear()
-        currentPage = -1
+        pages.clear(); dpis.clear(); currentPage = -1
         previewBitmap?.let { if (!it.isRecycled) it.recycle() }
-        previewBitmap = null
-        brightness = 0f
-        contrast = 1f
-        grayscale = false
+        previewBitmap = null; brightness = 0f; contrast = 1f; grayscale = false
         renderTab(1)
         setStatus("New document ready")
     }
 
-    private fun setStatus(text: String) {
-        if (::status.isInitialized) status.text = text
-    }
+    private fun setStatus(text: String) { if (::status.isInitialized) status.text = text }
 
     private fun navButton(icon: String, label: String, tab: Int) {
-        val b = TextView(this).apply {
-            text = "$icon\n$label"
+        val holder = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setPadding(0,dp(2),0,dp(2))
+            setOnClickListener { renderTab(tab) }
+        }
+        holder.addView(TextView(this).apply {
+            text = icon
+            gravity = Gravity.CENTER
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (tab == currentTab) Color.rgb(85,160,255) else Color.rgb(125,140,160))
+        })
+        holder.addView(TextView(this).apply {
+            text = label
             gravity = Gravity.CENTER
             textSize = 11f
             typeface = Typeface.DEFAULT_BOLD
             setTextColor(if (tab == currentTab) Color.rgb(85,160,255) else Color.rgb(125,140,160))
-            setPadding(0,dp(3),0,dp(3))
-            isClickable = true
-            isFocusable = true
-            setOnClickListener { renderTab(tab) }
-        }
-        nav.addView(b, weight(1f,2))
+        })
+        nav.addView(holder, weight(1f,2))
     }
 
     private fun title(main: String, sub: String) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        addView(TextView(this@MainActivity).apply {
-            text = main
-            textSize = 28f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-        })
-        addView(TextView(this@MainActivity).apply {
-            text = sub
-            textSize = 11f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(105,145,190))
-            setPadding(0,dp(4),0,dp(14))
-        })
+        addView(TextView(this@MainActivity).apply { text = main; textSize = 28f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+        addView(TextView(this@MainActivity).apply { text = sub; textSize = 11f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(105,145,190)); setPadding(0,dp(4),0,dp(14)) })
     }
 
-    private fun card() = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL
-        setPadding(dp(16),dp(15),dp(16),dp(15))
-        background = panel()
-    }
+    private fun card() = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16),dp(15),dp(16),dp(15)); background = panel() }
 
     private fun emptyCard(a: String,b: String) = card().apply {
-        addView(TextView(this@MainActivity).apply {
-            text = a
-            textSize = 17f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-        })
-        addView(TextView(this@MainActivity).apply {
-            text = b
-            textSize = 12f
-            setTextColor(Color.rgb(130,145,165))
-            setPadding(0,dp(5),0,0)
-        })
+        addView(TextView(this@MainActivity).apply { text = a; textSize = 17f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+        addView(TextView(this@MainActivity).apply { text = b; textSize = 12f; setTextColor(Color.rgb(130,145,165)); setPadding(0,dp(5),0,0) })
     }
 
-    private fun section(text: String) = TextView(this).apply {
-        this.text = text
-        textSize = 11f
-        typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.rgb(120,145,175))
-        setPadding(dp(2),dp(4),0,dp(7))
-    }
+    private fun section(text: String) = TextView(this).apply { this.text = text; textSize = 11f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(120,145,175)); setPadding(dp(2),dp(4),0,dp(7)) }
 
     private fun actionButton(text: String, action: () -> Unit) = Button(this).apply {
-        this.text = text
-        textSize = 13f
-        typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.WHITE)
-        isAllCaps = false
-        background = rounded(Color.rgb(28,108,205),18)
-        setOnClickListener { action() }
-        minHeight = 0
-        minimumHeight = 0
+        this.text = text; textSize = 13f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE); isAllCaps = false
+        background = rounded(Color.rgb(28,108,205),18); setOnClickListener { action() }; minHeight = 0; minimumHeight = 0
     }
 
     private fun tile(icon: String, text: String, action: () -> Unit) = Button(this).apply {
-        this.text = "$icon\n$text"
-        textSize = 11f
-        setTextColor(Color.rgb(215,225,238))
-        isAllCaps = false
-        background = rounded(Color.rgb(18,25,36),16)
-        setOnClickListener { action() }
-        minHeight = 0
-        minimumHeight = 0
+        this.text = "$icon\n$text"; textSize = 11f; setTextColor(Color.rgb(215,225,238)); isAllCaps = false
+        background = rounded(Color.rgb(18,25,36),16); setOnClickListener { action() }; minHeight = 0; minimumHeight = 0
     }
 
     private fun statCard(value: String, label: String) = card().apply {
         gravity = Gravity.CENTER
-        addView(TextView(this@MainActivity).apply {
-            text = value
-            textSize = 21f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-            gravity = Gravity.CENTER
-        })
-        addView(TextView(this@MainActivity).apply {
-            text = label
-            textSize = 9f
-            setTextColor(Color.rgb(120,140,165))
-            gravity = Gravity.CENTER
-        })
+        addView(TextView(this@MainActivity).apply { text = value; textSize = 21f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
+        addView(TextView(this@MainActivity).apply { text = label; textSize = 9f; setTextColor(Color.rgb(120,140,165)); gravity = Gravity.CENTER })
     }
 
     private fun fileRow(file: File, selectable: Boolean = false): View {
-        val r = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(12),dp(10),dp(12),dp(10))
-            background = panel()
-        }
-        val img = ImageView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(dp(58),dp(58))
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            setImageBitmap(library.decode(file))
-        }
+        val r = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(dp(12),dp(10),dp(12),dp(10)); background = panel() }
+        val img = ImageView(this).apply { layoutParams = LinearLayout.LayoutParams(dp(58),dp(58)); scaleType = ImageView.ScaleType.CENTER_CROP; setImageBitmap(library.decode(file)) }
         r.addView(img)
-        val t = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(10),0,0,0)
-        }
-        t.addView(TextView(this).apply {
-            text = file.name
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
-        })
-        t.addView(TextView(this).apply {
-            text = "${(file.length()/1024).coerceAtLeast(1)} KB • ${file.extension.uppercase()}"
-            textSize = 11f
-            setTextColor(Color.rgb(125,140,160))
-            setPadding(0,dp(4),0,0)
-        })
+        val t = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(10),0,0,0) }
+        t.addView(TextView(this).apply { text = file.name; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE) })
+        t.addView(TextView(this).apply { text = "${(file.length()/1024).coerceAtLeast(1)} KB • ${file.extension.uppercase()}"; textSize = 11f; setTextColor(Color.rgb(125,140,160)); setPadding(0,dp(4),0,0) })
         r.addView(t, LinearLayout.LayoutParams(0,-2,1f))
         if (selectable) {
             val cb = CheckBox(this).apply {
                 isChecked = selectedLibrary.contains(file.absolutePath)
                 buttonTintList = android.content.res.ColorStateList.valueOf(Color.rgb(80,150,255))
-                setOnCheckedChangeListener { _, checked ->
-                    if (checked) selectedLibrary.add(file.absolutePath) else selectedLibrary.remove(file.absolutePath)
-                }
+                setOnCheckedChangeListener { _, checked -> if (checked) selectedLibrary.add(file.absolutePath) else selectedLibrary.remove(file.absolutePath) }
             }
             r.addView(cb)
         } else {
@@ -907,11 +877,7 @@ class MainActivity : Activity() {
                 executor.execute {
                     val b = library.decode(file)
                     if (b != null) runOnUiThread {
-                        pages.add(b)
-                        dpis.add(300)
-                        currentPage = pages.lastIndex
-                        previewBitmap = null
-                        renderTab(1)
+                        pages.add(b); dpis.add(300); currentPage = pages.lastIndex; previewBitmap = null; renderTab(1)
                     }
                 }
             }
@@ -920,54 +886,42 @@ class MainActivity : Activity() {
     }
 
     private fun thumbnail(bmp: Bitmap, selected: Boolean, click: () -> Unit) = ImageButton(this).apply {
-        setImageBitmap(bmp)
-        scaleType = ImageView.ScaleType.CENTER_CROP
-        background = rounded(if (selected) Color.rgb(28,108,205) else Color.rgb(20,28,40),12)
-        setPadding(dp(4),dp(4),dp(4),dp(4))
-        setOnClickListener { click() }
+        setImageBitmap(bmp); scaleType = ImageView.ScaleType.CENTER_CROP; background = rounded(if (selected) Color.rgb(28,108,205) else Color.rgb(20,28,40),12)
+        setPadding(dp(4),dp(4),dp(4),dp(4)); setOnClickListener { click() }
     }
 
     private fun slider(label: String, min: Int, max: Int, initial: Int, changed: (Int) -> Unit) = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        addView(TextView(this@MainActivity).apply {
-            text = label
-            textSize = 12f
-            setTextColor(Color.rgb(170,185,205))
-            setPadding(0,dp(7),0,0)
-        })
+        val header = row()
+        header.addView(TextView(this@MainActivity).apply { text = label; textSize = 12f; setTextColor(Color.rgb(170,185,205)); setPadding(0,dp(7),0,0) }, weight(1f,0))
+        val value = TextView(this@MainActivity).apply { text = initial.toString(); textSize = 12f; typeface = Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER; setTextColor(Color.WHITE); setPadding(dp(8),dp(4),dp(8),0) }
+        header.addView(value, LinearLayout.LayoutParams(dp(48),dp(28)))
+        addView(header)
+        val controls = row()
+        val minus = Button(this@MainActivity).apply { text = "−"; textSize = 18f; minHeight = 0; minimumHeight = 0; setTextColor(Color.WHITE); background = rounded(Color.rgb(18,25,36),12) }
+        val plus = Button(this@MainActivity).apply { text = "+"; textSize = 18f; minHeight = 0; minimumHeight = 0; setTextColor(Color.WHITE); background = rounded(Color.rgb(18,25,36),12) }
         val s = SeekBar(this@MainActivity).apply {
-            this.max = max-min
-            progress = initial-min
-            setOnSeekBarChangeListener(object: SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(v: SeekBar?, p: Int, fromUser: Boolean) { changed(p+min) }
+            this.max = max - min
+            progress = initial - min
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(v: SeekBar?, p: Int, fromUser: Boolean) { val n = p + min; value.text = n.toString(); changed(n) }
                 override fun onStartTrackingTouch(v: SeekBar?) {}
                 override fun onStopTrackingTouch(v: SeekBar?) {}
             })
         }
-        addView(s)
+        minus.setOnClickListener { s.progress = (s.progress - 1).coerceAtLeast(0) }
+        plus.setOnClickListener { s.progress = (s.progress + 1).coerceAtMost(s.max) }
+        controls.addView(minus, LinearLayout.LayoutParams(dp(44),dp(42)).apply { setMargins(0,dp(2),dp(6),0) })
+        controls.addView(s, weight(1f,0))
+        controls.addView(plus, LinearLayout.LayoutParams(dp(44),dp(42)).apply { setMargins(dp(6),dp(2),0,0) })
+        addView(controls)
     }
 
-    private fun row() = LinearLayout(this).apply {
-        orientation = LinearLayout.HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
-    }
-
+    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
     private fun panel() = rounded(Color.rgb(15,21,31),18)
-
-    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(radius).toFloat()
-        setStroke(dp(1), Color.rgb(28,38,52))
-    }
-
-    private fun margin(top: Int,bottom: Int) = LinearLayout.LayoutParams(-1,-2).apply {
-        setMargins(0,dp(top),0,dp(bottom))
-    }
-
-    private fun weight(w: Float,m: Int) = LinearLayout.LayoutParams(0,-2,w).apply {
-        if (m > 0) setMargins(dp(m),0,dp(m),0)
-    }
-
+    private fun rounded(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat(); setStroke(dp(1), Color.rgb(28,38,52)) }
+    private fun margin(top: Int,bottom: Int) = LinearLayout.LayoutParams(-1,-2).apply { setMargins(0,dp(top),0,dp(bottom)) }
+    private fun weight(w: Float,m: Int) = LinearLayout.LayoutParams(0,-2,w).apply { if (m > 0) setMargins(dp(m),0,dp(m),0) }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).roundToInt()
 
     override fun onDestroy() {
