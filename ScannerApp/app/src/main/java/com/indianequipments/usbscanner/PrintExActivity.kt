@@ -2,10 +2,12 @@ package com.indianequipments.usbscanner
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.Dialog
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.Matrix
 import android.graphics.pdf.PdfRenderer
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
@@ -14,6 +16,8 @@ import android.print.PrintDocumentAdapter
 import android.print.PrintDocumentInfo
 import android.print.PrintManager
 import android.view.Gravity
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.*
 import java.io.File
@@ -28,6 +32,7 @@ class PrintExActivity : Activity() {
     private var sourceFile: File? = null
     private var mimeType = "application/pdf"
     private var pageCount = 1
+    private var currentPage = 0
     private var previewBitmap: Bitmap? = null
     private var copies = 1
     private var colorMode = "Black & White"
@@ -110,12 +115,23 @@ class PrintExActivity : Activity() {
             setBackgroundColor(Color.rgb(18,24,34))
             minimumHeight = dp(300)
             setPadding(dp(10),dp(10),dp(10),dp(10))
+            isClickable = true
+            setOnClickListener { openDocumentViewer() }
         }
         pcard.addView(preview, LinearLayout.LayoutParams(-1, dp(310)))
+        val pageControls = row()
+        pageControls.addView(smallButton("‹") { showPage(currentPage - 1) }, LinearLayout.LayoutParams(dp(52), dp(42)))
+        pageInfo = TextView(this).apply {
+            text = "Page 1 / 1"
+            gravity = Gravity.CENTER
+            textSize = 12f
+            setTextColor(MUTED)
+        }
+        pageControls.addView(pageInfo, LinearLayout.LayoutParams(0, dp(42), 1f))
+        pageControls.addView(smallButton("›") { showPage(currentPage + 1) }, LinearLayout.LayoutParams(dp(52), dp(42)))
+        pcard.addView(pageControls)
         fileName = TextView(this).apply { text = "No document selected"; textSize = 16f; setTypeface(null, android.graphics.Typeface.BOLD); setTextColor(Color.WHITE); setPadding(0,dp(8),0,0) }
-        pageInfo = TextView(this).apply { text = "Select a PDF or image to begin"; textSize = 12f; setTextColor(MUTED); setPadding(0,dp(3),0,0) }
         pcard.addView(fileName)
-        pcard.addView(pageInfo)
         root.addView(pcard, margin(0,10))
 
         root.addView(section("PRINT SETTINGS"))
@@ -143,7 +159,7 @@ class PrintExActivity : Activity() {
 
     private fun handleIntent(i: Intent?) {
         val uri = when (i?.action) {
-            Intent.ACTION_SEND -> i.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
+            Intent.ACTION_SEND, Intent.ACTION_SEND_MULTIPLE -> i.getParcelableExtra<android.net.Uri>(Intent.EXTRA_STREAM)
             Intent.ACTION_VIEW -> i.data
             else -> null
         }
@@ -186,6 +202,7 @@ class PrintExActivity : Activity() {
             }
             sourceFile?.delete()
             sourceFile = out
+            currentPage = 0
             fileName.text = uri.lastPathSegment?.substringAfterLast('/') ?: "Selected document"
             loadPreview(out)
         } catch (t: Throwable) {
@@ -198,24 +215,133 @@ class PrintExActivity : Activity() {
         previewBitmap = null
         if (mimeType == "application/pdf") {
             try {
-                val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-                PdfRenderer(pfd).use { renderer ->
-                    pageCount = renderer.pageCount
-                    if (renderer.pageCount > 0) renderer.openPage(0).use { page ->
-                        val bmp = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
-                        bmp.eraseColor(Color.WHITE)
-                        page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-                        previewBitmap = bmp
+                ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+                    PdfRenderer(pfd).use { renderer ->
+                        pageCount = renderer.pageCount.coerceAtLeast(1)
                     }
                 }
-                pfd.close()
-            } catch (_: Throwable) { pageCount = 1 }
+                showPage(0)
+            } catch (_: Throwable) {
+                pageCount = 1
+                showPage(0)
+            }
         } else {
-            previewBitmap = BitmapFactory.decodeFile(file.absolutePath, BitmapFactory.Options().apply { inSampleSize = 2 })
+            previewBitmap = BitmapFactory.decodeFile(file.absolutePath)
             pageCount = 1
+            preview.setImageBitmap(previewBitmap)
         }
-        preview.setImageBitmap(previewBitmap)
-        pageInfo.text = "$pageCount page${if (pageCount == 1) "" else "s"} • ${mimeType.substringAfterLast('/').uppercase()}"
+        pageInfo.text = "Page ${currentPage + 1} / $pageCount"
+    }
+
+    private fun showPage(index: Int) {
+        if (sourceFile == null) return
+        currentPage = index.coerceIn(0, pageCount - 1)
+        if (mimeType != "application/pdf") {
+            preview.setImageBitmap(previewBitmap)
+            pageInfo.text = "Page 1 / 1"
+            return
+        }
+        val file = sourceFile ?: return
+        try {
+            previewBitmap?.let { if (!it.isRecycled) it.recycle() }
+            previewBitmap = renderPdfPage(file, currentPage, 2.5f)
+            preview.setImageBitmap(previewBitmap)
+            pageInfo.text = "Page ${currentPage + 1} / $pageCount"
+        } catch (_: Throwable) {
+            pageInfo.text = "Page ${currentPage + 1} / $pageCount"
+        }
+    }
+
+    private fun renderPdfPage(file: File, index: Int, scale: Float): Bitmap {
+        ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY).use { pfd ->
+            PdfRenderer(pfd).use { renderer ->
+                renderer.openPage(index).use { page ->
+                    val w = (page.width * scale).roundToInt().coerceAtLeast(1200)
+                    val h = (page.height * scale).roundToInt().coerceAtLeast(1600)
+                    val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+                    bmp.eraseColor(Color.WHITE)
+                    page.render(bmp, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
+                    return bmp
+                }
+            }
+        }
+    }
+
+    private fun openDocumentViewer() {
+        val file = sourceFile ?: run {
+            Toast.makeText(this, "Select a document first", Toast.LENGTH_SHORT).show()
+            return
+        }
+        val viewer = Dialog(this, android.R.style.Theme_DeviceDefault_NoActionBar_Fullscreen)
+        viewer.window?.setBackgroundDrawableResource(android.R.color.black)
+        val shell = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.rgb(4,7,12))
+            setPadding(dp(8), dp(28), dp(8), dp(10))
+        }
+
+        val header = row()
+        header.addView(TextView(this).apply {
+            text = "‹  DOCUMENT PREVIEW"
+            textSize = 17f
+            setTypeface(null, android.graphics.Typeface.BOLD)
+            setTextColor(Color.WHITE)
+            setPadding(dp(4), dp(4), 0, dp(4))
+            setOnClickListener { viewer.dismiss() }
+        }, LinearLayout.LayoutParams(0, dp(48), 1f))
+        val reset = TextView(this).apply {
+            text = "100%"
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = rounded(Color.rgb(18,25,36), 12)
+            setPadding(dp(10),0,dp(10),0)
+        }
+        header.addView(reset, LinearLayout.LayoutParams(dp(64), dp(40)))
+
+        val zoom = ZoomImageView(this)
+        zoom.setBackgroundColor(Color.rgb(10,14,22))
+        zoom.setImageBitmap(if (mimeType == "application/pdf") renderPdfPage(file, currentPage, 4f) else previewBitmap)
+        shell.addView(zoom, LinearLayout.LayoutParams(-1, 0, 1f))
+        zoom.onScaleChanged = { value -> reset.text = "${(value * 100).roundToInt()}%" }
+
+        val controls = row().apply { setPadding(dp(4), dp(8), dp(4), dp(4)) }
+        lateinit var pageIndicatorInViewer: TextView
+        controls.addView(smallButton("‹") {
+            if (currentPage > 0) {
+                currentPage--
+                pageIndicatorInViewer.text = "Page ${currentPage + 1} / $pageCount"
+                zoom.setImageBitmap(if (mimeType == "application/pdf") renderPdfPage(file, currentPage, 4f) else previewBitmap)
+                zoom.resetZoom()
+            }
+        }, LinearLayout.LayoutParams(dp(58), dp(48)))
+        pageIndicatorInViewer = TextView(this).apply {
+            text = "Page ${currentPage + 1} / $pageCount"
+            gravity = Gravity.CENTER
+            textSize = 13f
+            setTextColor(MUTED)
+        }
+        controls.addView(pageIndicatorInViewer, LinearLayout.LayoutParams(0, dp(48), 1f))
+        controls.addView(smallButton("›") {
+            if (currentPage < pageCount - 1) {
+                currentPage++
+                pageIndicatorInViewer.text = "Page ${currentPage + 1} / $pageCount"
+                zoom.setImageBitmap(if (mimeType == "application/pdf") renderPdfPage(file, currentPage, 4f) else previewBitmap)
+                zoom.resetZoom()
+            }
+        }, LinearLayout.LayoutParams(dp(58), dp(48)))
+        shell.addView(controls)
+
+        shell.addView(TextView(this).apply {
+            text = "Pinch to zoom • Drag to inspect • Tap page arrows to change pages"
+            textSize = 11f
+            gravity = Gravity.CENTER
+            setTextColor(Color.rgb(120,135,155))
+            setPadding(0,0,0,dp(6))
+        })
+
+        viewer.setContentView(shell)
+        viewer.show()
     }
 
     private fun smartPrint() {
@@ -252,7 +378,12 @@ class PrintExActivity : Activity() {
         val f = sourceFile
         val old = previewBitmap
         buildUi()
-        if (f != null && f.exists()) { sourceFile = f; previewBitmap = old; preview.setImageBitmap(old); pageInfo.text = "$pageCount pages • ${mimeType.substringAfterLast('/').uppercase()}" }
+        if (f != null && f.exists()) {
+            sourceFile = f
+            previewBitmap = old
+            if (mimeType == "application/pdf") showPage(currentPage) else preview.setImageBitmap(old)
+            pageInfo.text = "Page ${currentPage + 1} / $pageCount"
+        }
     }
 
     private fun settingRow(parent: LinearLayout, label: String, value: String, click: () -> Unit) {
@@ -281,6 +412,84 @@ class PrintExActivity : Activity() {
                 callback.onWriteFinished(arrayOf(android.print.PageRange.ALL_PAGES))
             } catch (t: Throwable) { callback.onWriteFailed(t.message) }
         }
+    }
+
+    private class ZoomImageView(context: android.content.Context) : ImageView(context) {
+        private var scaleFactor = 1f
+        private var lastX = 0f
+        private var lastY = 0f
+        private var detector = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScale(d: ScaleGestureDetector): Boolean {
+                scaleFactor = (scaleFactor * d.scaleFactor).coerceIn(1f, 8f)
+                applyTransform()
+                onScaleChanged?.invoke(scaleFactor)
+                return true
+            }
+        })
+        var onScaleChanged: ((Float) -> Unit)? = null
+
+        init {
+            scaleType = ImageView.ScaleType.MATRIX
+            setOnTouchListener { _, event ->
+                detector.onTouchEvent(event)
+                when (event.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        lastX = event.x
+                        lastY = event.y
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        if (scaleFactor > 1f && event.pointerCount == 1) {
+                            val dx = event.x - lastX
+                            val dy = event.y - lastY
+                            imageMatrix.postTranslate(dx, dy)
+                            imageMatrix = imageMatrix
+                            lastX = event.x
+                            lastY = event.y
+                        }
+                    }
+                }
+                true
+            }
+        }
+
+        fun resetZoom() {
+            scaleFactor = 1f
+            applyTransform()
+            onScaleChanged?.invoke(1f)
+        }
+
+        private fun applyTransform() {
+            val d = drawable ?: return
+            val vw = width.toFloat()
+            val vh = height.toFloat()
+            if (vw <= 0f || vh <= 0f) return
+            val dw = d.intrinsicWidth.toFloat()
+            val dh = d.intrinsicHeight.toFloat()
+            val base = minOf(vw / dw, vh / dh)
+            val matrix = Matrix()
+            val scaledW = dw * base * scaleFactor
+            val scaledH = dh * base * scaleFactor
+            val left = (vw - scaledW) / 2f
+            val top = (vh - scaledH) / 2f
+            matrix.setScale(base * scaleFactor, base * scaleFactor)
+            matrix.postTranslate(left, top)
+            imageMatrix = matrix
+        }
+
+        override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
+            super.onSizeChanged(w, h, oldw, oldh)
+            post { applyTransform() }
+        }
+    }
+
+    private fun smallButton(text: String, click: () -> Unit) = Button(this).apply {
+        this.text = text
+        textSize = 22f
+        setTextColor(Color.WHITE)
+        background = rounded(Color.rgb(18,25,36), 14)
+        setOnClickListener { click() }
+        minHeight = 0
+        minimumHeight = 0
     }
 
     private fun card() = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setPadding(dp(16),dp(14),dp(16),dp(14)); background=rounded(Color.rgb(15,21,31),18) }
