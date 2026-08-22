@@ -1,5 +1,6 @@
 package com.indianequipments.usbscanner
 
+import android.app.Activity
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.view.Gravity
@@ -7,10 +8,9 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import android.hardware.usb.UsbDevice
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : Activity() {
     private lateinit var usb: UsbScannerManager
     private lateinit var status: TextView
     private lateinit var deviceText: TextView
@@ -23,9 +23,9 @@ class MainActivity : AppCompatActivity() {
         document = ScanDocument(this)
         usb = UsbScannerManager(this)
         usb.onPermissionGranted = { device -> connectDevice(device) }
-        usb.onPermissionDenied = { status.text = "USB permission denied." }
-        usb.register()
+        usb.onPermissionDenied = { if (::status.isInitialized) status.text = "USB permission denied." }
         setContentView(buildUi())
+        usb.register()
         refreshDevices()
     }
 
@@ -43,52 +43,32 @@ class MainActivity : AppCompatActivity() {
         deviceText = TextView(this).apply { textSize = 15f }
         val refresh = Button(this).apply { text = "Refresh USB devices"; setOnClickListener { refreshDevices() } }
         val connect = Button(this).apply { text = "Connect scanner"; setOnClickListener { requestFirstScanner() } }
-        val scan = Button(this).apply {
-            text = "SCAN"
-            setOnClickListener { runScan() }
-        }
-        val savePdf = Button(this).apply {
-            text = "Save scanned pages as PDF"
-            setOnClickListener { savePdf() }
-        }
-        root.addView(title)
-        root.addView(status)
-        root.addView(deviceText)
-        root.addView(refresh)
-        root.addView(connect)
-        root.addView(scan)
-        root.addView(savePdf)
+        val scan = Button(this).apply { text = "SCAN"; setOnClickListener { runScan() } }
+        val savePdf = Button(this).apply { text = "Save scanned pages as PDF"; setOnClickListener { savePdf() } }
+        root.addView(title); root.addView(status); root.addView(deviceText)
+        root.addView(refresh); root.addView(connect); root.addView(scan); root.addView(savePdf)
         return ScrollView(this).apply { addView(root) }
     }
 
     private fun refreshDevices() {
         val all = usb.allDevices()
         val scanners = usb.scannerDevices()
-        deviceText.text = if (all.isEmpty()) {
-            "No USB device detected. Connect the scanner using a USB-OTG adapter."
-        } else {
+        deviceText.text = if (all.isEmpty()) "No USB device detected. Connect the scanner using a USB-OTG adapter." else
             all.joinToString("\n") { d ->
                 val scanner = if (scanners.any { it.deviceId == d.deviceId }) " [IMAGING/SCANNER CLASS]" else ""
                 "${d.productName ?: "USB device"}  VID ${d.vendorId} / PID ${d.productId}$scanner"
             }
-        }
         status.text = "${scanners.size} scanner-class device(s) detected."
     }
 
     private fun requestFirstScanner() {
         val device = usb.scannerDevices().firstOrNull()
-        if (device == null) {
-            status.text = "No USB scanner-class device found."
-            return
-        }
+        if (device == null) { status.text = "No USB scanner-class device found."; return }
         usb.requestPermission(device)
     }
 
     private fun connectDevice(device: UsbDevice) {
-        if (!usb.open(device)) {
-            status.text = "Could not open the scanner USB interface."
-            return
-        }
+        if (!usb.open(device)) { status.text = "Could not open the scanner USB interface."; return }
         connectedDevice = device
         val protocol = ScannerProtocol(usb.connection()!!, usb.usbInterface()!!)
         val cap = protocol.probe()
@@ -96,25 +76,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun runScan() {
-        if (connectedDevice == null) {
-            status.text = "Connect the scanner first."
-            return
-        }
+        if (connectedDevice == null) { status.text = "Connect the scanner first."; return }
         status.text = "Scanner connected, but no verified model-specific scan backend is configured yet."
     }
 
     private fun savePdf() {
-        if (pages.isEmpty()) {
-            status.text = "No scanned pages available."
-            return
-        }
+        if (pages.isEmpty()) { status.text = "No scanned pages available."; return }
         val file = document.savePdf(pages)
         status.text = "PDF saved: ${file.absolutePath}"
     }
 
     override fun onDestroy() {
-        usb.close()
-        usb.unregister()
-        super.onDestroy()
+        usb.close(); usb.unregister(); super.onDestroy()
     }
 }
