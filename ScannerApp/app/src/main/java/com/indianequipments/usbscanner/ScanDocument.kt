@@ -13,15 +13,17 @@ import java.io.FileOutputStream
 import kotlin.math.roundToInt
 
 class ScanDocument(private val context: Context) {
+    private val root = File(context.getExternalFilesDir(null), "Exports").apply { mkdirs() }
+
     fun rotate(source: Bitmap, degrees: Float): Bitmap {
         val matrix = Matrix().apply { postRotate(degrees) }
         return Bitmap.createBitmap(source, 0, 0, source.width, source.height, matrix, true)
     }
 
     fun grayscale(source: Bitmap): Bitmap {
-        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.RGB_565)
+        val result = Bitmap.createBitmap(source.width, source.height, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(result)
-        val paint = Paint().apply {
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             colorFilter = android.graphics.ColorMatrixColorFilter(
                 android.graphics.ColorMatrix().apply { setSaturation(0f) }
             )
@@ -31,8 +33,14 @@ class ScanDocument(private val context: Context) {
     }
 
     fun savePng(bitmap: Bitmap, name: String = "scan_${System.currentTimeMillis()}.png"): File {
-        val file = File(context.getExternalFilesDir(null), name)
+        val file = File(root, name.substringBeforeLast('.') + ".png")
         FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        return file
+    }
+
+    fun saveJpeg(bitmap: Bitmap, name: String = "scan_${System.currentTimeMillis()}.jpg"): File {
+        val file = File(root, name.substringBeforeLast('.') + ".jpg")
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
         return file
     }
 
@@ -43,7 +51,6 @@ class ScanDocument(private val context: Context) {
     ): File {
         require(pages.isNotEmpty())
         require(dpis.size == pages.size)
-
         val pdf = PdfDocument()
         try {
             pages.forEachIndexed { index, bitmap ->
@@ -53,16 +60,12 @@ class ScanDocument(private val context: Context) {
                 val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, index + 1).create()
                 val page = pdf.startPage(pageInfo)
                 page.canvas.drawColor(Color.WHITE)
-                val destination = RectF(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat())
-                page.canvas.drawBitmap(bitmap, null, destination, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+                page.canvas.drawBitmap(bitmap, null, RectF(0f, 0f, pageWidth.toFloat(), pageHeight.toFloat()), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
                 pdf.finishPage(page)
             }
-
-            val file = File(context.getExternalFilesDir(null), name)
+            val file = File(root, name.substringBeforeLast('.') + ".pdf")
             FileOutputStream(file).use { pdf.writeTo(it) }
             return file
-        } finally {
-            pdf.close()
-        }
+        } finally { pdf.close() }
     }
 }
