@@ -1,164 +1,404 @@
 package com.indianequipments.billing
 
-import android.app.*
-import android.content.*
+import android.app.Activity
+import android.app.AlertDialog
 import android.graphics.Color
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.view.*
+import android.view.Gravity
+import android.view.View
 import android.widget.*
 import java.io.File
-import java.io.FileOutputStream
 import java.util.Locale
 
 class MainActivity : Activity() {
     private lateinit var db: BillingDb
+    private lateinit var templateFile: File
     private var customers = listOf<Customer>()
     private var items = listOf<Item>()
-    private var lines = mutableListOf<BillLine>()
-    private var selectedCustomer: Customer? = null
-    private lateinit var templateFile: File
-    private val bg = Color.rgb(7, 18, 33)
-    private val surface = Color.rgb(14, 30, 50)
-    private val surface2 = Color.rgb(19, 39, 64)
-    private val blue = Color.rgb(38, 111, 255)
-    private val cyan = Color.rgb(52, 211, 238)
-    private val green = Color.rgb(24, 190, 130)
+    private val nav = java.util.ArrayDeque<String>()
+    private var current = "home"
+    private val bg = Color.rgb(5, 14, 27)
+    private val surface = Color.rgb(12, 28, 48)
+    private val surface2 = Color.rgb(18, 39, 65)
+    private val primary = Color.rgb(35, 104, 255)
+    private val cyan = Color.rgb(48, 196, 232)
+    private val green = Color.rgb(24, 190, 132)
     private val orange = Color.rgb(245, 139, 45)
     private val purple = Color.rgb(143, 92, 246)
-    private val text = Color.rgb(239, 246, 255)
-    private val muted = Color.rgb(151, 169, 194)
-    private val pad = 18
-    private val screenStack = ArrayDeque<() -> Unit>()
-    private var currentScreen = "home"
+    private val white = Color.rgb(241, 247, 255)
+    private val muted = Color.rgb(153, 173, 201)
 
-    override fun onCreate(b: Bundle?) { super.onCreate(b); db = BillingDb(this); templateFile = File(filesDir, "invoice_template.xlsx"); refresh(); showHome(false) }
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
+        window.statusBarColor = bg
+        window.navigationBarColor = bg
+        db = BillingDb(this)
+        templateFile = File(filesDir, "invoice_template.xlsx")
+        refresh()
+        showHome(false)
+    }
 
     override fun onBackPressed() {
-        if (screenStack.isNotEmpty()) screenStack.removeLast().invoke()
-        else if (currentScreen != "home") showHome(false)
-        else super.onBackPressed()
-    }
-
-    private fun refresh() { customers = db.customers(); items = db.items() }
-
-    private fun navigate(name: String, action: () -> Unit) {
-        if (currentScreen != name) {
-            val old = currentScreen
-            screenStack.addLast {
-                when (old) {
-                    "home" -> showHome(false)
-                    "customers" -> customerMaster(false)
-                    "items" -> itemMaster(false)
-                    "history" -> history(false)
-                    "reports" -> report(false)
-                    "settings" -> settings(false)
-                    else -> showHome(false)
-                }
-            }
+        if (nav.isNotEmpty()) {
+            val previous = nav.removeLast()
+            render(previous, false)
+        } else if (current != "home") {
+            render("home", false)
+        } else {
+            super.onBackPressed()
         }
-        currentScreen = name
-        action()
     }
 
-    private fun root(title: String, subtitle: String? = null, back: Boolean = true): LinearLayout {
-        val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, 10, pad, 18); setBackgroundColor(bg) }
-        val top = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        if (back) top.addView(iconButton("‹") { onBackPressed() }, LinearLayout.LayoutParams(50, 52))
-        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(6, 0, 6, 0) }
-        titles.addView(label(title, 21f, text, true)); if (subtitle != null) titles.addView(label(subtitle, 12f, muted))
-        top.addView(titles, LinearLayout.LayoutParams(0, 58, 1f)); top.addView(iconButton("⋮") {}, LinearLayout.LayoutParams(50, 52)); root.addView(top); setContentView(root); return root
+    private fun refresh() {
+        customers = db.customers()
+        items = db.items()
     }
 
-    private fun label(s: String, size: Number, color: Int = text, bold: Boolean = false) = TextView(this).apply { this.text = s; textSize = size.toFloat(); setTextColor(color); setPadding(0, 3, 0, 3); if (bold) typeface = Typeface.DEFAULT_BOLD }
-    private fun iconButton(symbol: String, click: () -> Unit) = Button(this).apply { text = symbol; textSize = 24f; setTextColor(this@MainActivity.text); setBackgroundColor(Color.TRANSPARENT); setOnClickListener { click() } }
-    private fun button(textValue: String, click: () -> Unit) = Button(this).apply { text = textValue; textSize = 14f; setTextColor(this@MainActivity.text); setBackgroundColor(surface2); setOnClickListener { click() } }
-    private fun input(hint: String) = EditText(this).apply { this.hint = hint; setHintTextColor(muted); setTextColor(this@MainActivity.text); setSingleLine(true); setPadding(14, 12, 14, 12); setBackgroundColor(surface2) }
-
-    private fun card(title: String, subtitle: String, icon: String, color: Int, click: () -> Unit): LinearLayout {
-        val c = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(16, 14, 12, 14); setBackgroundColor(surface); setOnClickListener { click() } }
-        val bubble = TextView(this).apply { this.text = icon; textSize = 22f; gravity = Gravity.CENTER; setTextColor(Color.WHITE); setBackgroundColor(color) }
-        c.addView(bubble, LinearLayout.LayoutParams(54, 54))
-        val tx = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(14, 0, 8, 0) }
-        tx.addView(label(title, 16f, text, true)); tx.addView(label(subtitle, 12f, muted)); c.addView(tx, LinearLayout.LayoutParams(0, 70, 1f)); c.addView(label("›", 30f, muted))
-        val lp = LinearLayout.LayoutParams(-1, 78); lp.setMargins(0, 6, 0, 6); c.layoutParams = lp; return c
+    private fun go(name: String, screen: () -> Unit) {
+        if (current != name) nav.addLast(current)
+        current = name
+        screen()
     }
 
-    private fun actionCard(title: String, subtitle: String, color: Int, click: () -> Unit): LinearLayout {
-        val c = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 14, 12, 12); setBackgroundColor(color); setOnClickListener { click() } }
-        c.addView(label(title, 17f, Color.WHITE, true)); c.addView(label(subtitle, 11f, Color.WHITE)); return c
+    private fun render(name: String, push: Boolean) {
+        if (push && current != name) nav.addLast(current)
+        current = name
+        when (name) {
+            "home" -> showHome(false)
+            "invoice" -> newInvoice(false)
+            "customers" -> customerMaster(false)
+            "items" -> itemMaster(false)
+            "history" -> history(false)
+            "reports" -> reports(false)
+            "settings" -> settings(false)
+            else -> showHome(false)
+        }
     }
 
-    private fun showHome(clear: Boolean = true) {
-        currentScreen = "home"; if (clear) screenStack.clear(); refresh(); val v = root("INDIAN EQUIPMENTS", "GST Billing Studio • FY ${Numbering.financialYear()}", false)
-        val hero = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(20, 18, 20, 18); setBackgroundColor(Color.rgb(13, 58, 132)) }
-        hero.addView(label("Good Morning, Admin 👋", 22f, Color.WHITE, true)); hero.addView(label("Premium GST Billing Studio", 13f, Color.rgb(207, 225, 255))); hero.addView(label("Template-driven • Tally-style workflow", 12f, Color.rgb(180, 210, 255)))
-        val stats = LinearLayout(this).apply { setPadding(0, 14, 0, 0) }; stats.addView(stat("FY", Numbering.financialYear()), LinearLayout.LayoutParams(0, 55, 1f)); stats.addView(stat("Customers", customers.size.toString()), LinearLayout.LayoutParams(0, 55, 1f)); stats.addView(stat("Items", items.size.toString()), LinearLayout.LayoutParams(0, 55, 1f)); hero.addView(stats); v.addView(hero)
-        v.addView(label("QUICK CREATE", 12f, muted, true))
-        val grid = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; grid.addView(actionCard("＋ Invoice", "GST Tax Invoice", blue) { newBill() }, LinearLayout.LayoutParams(0, 82, 1f)); grid.addView(actionCard("▣ Quotation", "Sales quotation", green) { newBill("Quotation") }, LinearLayout.LayoutParams(0, 82, 1f)); v.addView(grid)
-        val grid2 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; grid2.addView(actionCard("▤ Challan", "Delivery challan", orange) { newBill("Delivery Challan") }, LinearLayout.LayoutParams(0, 82, 1f)); grid2.addView(actionCard("▥ Proforma", "Proforma invoice", purple) { newBill("Proforma Invoice") }, LinearLayout.LayoutParams(0, 82, 1f)); v.addView(grid2)
-        v.addView(card("Customer / Party Master", "Manage saved customers, GSTIN & addresses", "👥", cyan) { navigate("customers") { customerMaster(false) } })
-        v.addView(card("Item Master", "HSN, description, unit, GST & default rate", "📦", green) { navigate("items") { itemMaster(false) } })
-        v.addView(card("Bills & History", "Search, edit, duplicate and review documents", "🧾", purple) { navigate("history") { history(false) } })
-        v.addView(card("Reports / Summary", "Sales, tax and customer insights", "📊", orange) { navigate("reports") { report(false) } })
-        v.addView(card("Settings / Excel Template", "Company, numbering, template & backup", "⚙", blue) { navigate("settings") { settings(false) } })
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun rounded(color: Int, radius: Int = 16, stroke: Int? = null): GradientDrawable =
+        GradientDrawable().apply {
+            setColor(color)
+            cornerRadius = dp(radius).toFloat()
+            stroke?.let { setStroke(dp(1), it) }
+        }
+
+    private fun text(value: String, size: Float, color: Int = white, bold: Boolean = false): TextView =
+        TextView(this).apply {
+            this.text = value
+            textSize = size
+            setTextColor(color)
+            setPadding(dp(2), dp(2), dp(2), dp(2))
+            if (bold) typeface = Typeface.DEFAULT_BOLD
+        }
+
+    private fun field(hint: String, value: String = ""): EditText =
+        EditText(this).apply {
+            this.hint = hint
+            setText(value)
+            textSize = 15f
+            setTextColor(white)
+            setHintTextColor(muted)
+            setSingleLine(true)
+            setPadding(dp(14), 0, dp(14), 0)
+            background = rounded(surface2, 12, Color.rgb(31, 57, 88))
+        }
+
+    private fun action(title: String, sub: String, color: Int, click: () -> Unit): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(16), dp(12), dp(14), dp(12))
+            background = rounded(color, 14)
+            isClickable = true
+            setOnClickListener { click() }
+            addView(text(title, 18f, Color.WHITE, true))
+            addView(text(sub, 11f, Color.WHITE))
+        }
+
+    private fun card(title: String, sub: String, icon: String, color: Int, click: () -> Unit): LinearLayout =
+        LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = rounded(surface, 15, Color.rgb(23, 45, 71))
+            isClickable = true
+            setOnClickListener { click() }
+            val badge = TextView(this@MainActivity).apply {
+                this.text = icon
+                textSize = 22f
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                background = rounded(color, 12)
+            }
+            addView(badge, LinearLayout.LayoutParams(dp(50), dp(50)))
+            val box = LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), 0, dp(6), 0)
+            }
+            box.addView(text(title, 16f, white, true))
+            box.addView(text(sub, 11f, muted))
+            addView(box, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(text("›", 30f, muted, false))
+        }
+
+    private fun root(title: String, sub: String = ""): LinearLayout {
+        val outer = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(8), dp(14), dp(18))
+            setBackgroundColor(bg)
+        }
+        val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        val back = Button(this).apply {
+            text = "‹"
+            textSize = 30f
+            setTextColor(white)
+            background = rounded(Color.TRANSPARENT, 10)
+            setOnClickListener { onBackPressed() }
+        }
+        bar.addView(back, LinearLayout.LayoutParams(dp(52), dp(52)))
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_VERTICAL }
+        titles.addView(text(title, 20f, white, true))
+        if (sub.isNotBlank()) titles.addView(text(sub, 11f, muted))
+        bar.addView(titles, LinearLayout.LayoutParams(0, dp(58), 1f))
+        outer.addView(bar)
+        val scroll = ScrollView(this).apply { fillViewport = true }
+        val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        scroll.addView(content)
+        outer.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(outer)
+        return content
     }
 
-    private fun stat(a: String, b: String) = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(4, 0, 4, 0); addView(label(a, 10f, Color.rgb(180, 210, 255))); addView(label(b, 14f, Color.WHITE, true)) }
+    private fun section(title: String): TextView = text(title.uppercase(Locale.US), 11f, muted, true).apply { setPadding(0, dp(12), 0, dp(6)) }
+
+    private fun addGap(parent: LinearLayout, h: Int = 8) { parent.addView(Space(this), LinearLayout.LayoutParams(1, dp(h))) }
+
+    private fun showHome(push: Boolean = true) {
+        if (push) go("home") { showHome(false) } else current = "home"
+        refresh()
+        val v = root("INDIAN EQUIPMENTS", "Premium GST Invoice Studio • FY ${Numbering.financialYear()}")
+        val hero = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(20), dp(20), dp(18))
+            background = rounded(Color.rgb(15, 67, 145), 20)
+        }
+        hero.addView(text("Good Morning, Admin  👋", 24f, Color.WHITE, true))
+        hero.addView(text("Invoice-only • Template-driven • Professional workflow", 13f, Color.rgb(211, 229, 255)))
+        addGap(hero, 10)
+        val stats = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        stats.addView(stat("FY", Numbering.financialYear()), LinearLayout.LayoutParams(0, dp(48), 1f))
+        stats.addView(stat("PARTIES", customers.size.toString()), LinearLayout.LayoutParams(0, dp(48), 1f))
+        stats.addView(stat("ITEMS", items.size.toString()), LinearLayout.LayoutParams(0, dp(48), 1f))
+        hero.addView(stats)
+        v.addView(hero)
+        v.addView(section("Quick Create"))
+        val r1 = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        r1.addView(action("＋  INVOICE", "GST Tax Invoice", primary) { render("invoice", true) }, LinearLayout.LayoutParams(0, dp(78), 1f))
+        r1.addView(Space(this), LinearLayout.LayoutParams(dp(6), 1))
+        r1.addView(action("⌁  DUPLICATE", "From bill history", purple) { duplicateLatest() }, LinearLayout.LayoutParams(0, dp(78), 1f))
+        v.addView(r1)
+        addGap(v, 8)
+        v.addView(card("Customer / Party Master", "GSTIN • address • state • contact", "👥", cyan) { render("customers", true) })
+        addGap(v, 7)
+        v.addView(card("Item Master", "HSN • description • unit • GST • rate", "📦", green) { render("items", true) })
+        addGap(v, 7)
+        v.addView(card("Bills & History", "Search, review and regenerate invoices", "🧾", purple) { render("history", true) })
+        addGap(v, 7)
+        v.addView(card("Reports / Summary", "Invoice count • taxable • GST totals", "📊", orange) { render("reports", true) })
+        addGap(v, 7)
+        v.addView(card("Settings / Excel Template", "Template mapping • numbering • backup", "⚙", primary) { render("settings", true) })
+    }
+
+    private fun stat(a: String, b: String) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        addView(text(a, 9f, Color.rgb(178, 207, 246), true))
+        addView(text(b, 14f, Color.WHITE, true))
+    }
 
     private fun customerMaster(push: Boolean = true) {
-        if (push) { navigate("customers") { customerMaster(false) }; return }
-        refresh(); val v = root("Customers / Party Master", "${customers.size} saved parties"); v.addView(input("Search by name, GSTIN, phone or city…")); v.addView(button("＋  Add New Customer") { customerDialog() }); customers.forEach { c -> v.addView(card(c.name, "${c.gstin.ifBlank { "GSTIN not set" }} • ${c.state}", "👤", green) { customerDialog(c) }) }
+        if (push) { render("customers", true); return }
+        refresh()
+        val v = root("Customer / Party Master", "${customers.size} saved parties")
+        v.addView(action("＋  ADD CUSTOMER", "Create a reusable party profile", green) { customerDialog() })
+        addGap(v)
+        customers.forEach { c ->
+            v.addView(card(c.name, "${c.gstin.ifBlank { "GSTIN not set" }} • ${c.state.ifBlank { "State not set" }}", "👤", cyan) { customerDialog(c) })
+            addGap(v, 6)
+        }
     }
 
     private fun customerDialog(existing: Customer? = null) {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 8, 0) }
-        val fields = listOf(input("Party / Customer name"), input("GSTIN"), input("Address"), input("State"), input("State code"), input("Phone"), input("Email"))
-        existing?.let { fields[0].setText(it.name); fields[1].setText(it.gstin); fields[2].setText(it.address); fields[3].setText(it.state); fields[4].setText(it.stateCode); fields[5].setText(it.phone); fields[6].setText(it.email) }
-        fields.forEach { f -> box.addView(f, LinearLayout.LayoutParams(-1, 52)) }
-        AlertDialog.Builder(this).setTitle(if (existing == null) "Add Customer" else "Edit Customer").setView(box).setPositiveButton("Save") { _, _ -> if (existing == null) db.addCustomer(Customer(0, fields[0].text.toString(), fields[1].text.toString(), fields[2].text.toString(), fields[3].text.toString(), fields[4].text.toString(), fields[5].text.toString(), fields[6].text.toString())); refresh(); customerMaster(false) }.setNegativeButton("Cancel", null).show()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        val f = listOf(field("Party / Customer name", existing?.name ?: ""), field("GSTIN", existing?.gstin ?: ""), field("Address", existing?.address ?: ""), field("State", existing?.state ?: ""), field("State code", existing?.stateCode ?: ""), field("Phone", existing?.phone ?: ""), field("Email", existing?.email ?: ""))
+        f.forEach { box.addView(it, LinearLayout.LayoutParams(-1, dp(52))); addGap(box, 5) }
+        AlertDialog.Builder(this).setTitle(if (existing == null) "Add Customer" else "Edit Customer").setView(box)
+            .setPositiveButton("SAVE") { _, _ ->
+                if (f[0].text.toString().trim().isEmpty()) { toast("Customer name is required"); return@setPositiveButton }
+                db.addCustomer(Customer(0, f[0].text.toString(), f[1].text.toString(), f[2].text.toString(), f[3].text.toString(), f[4].text.toString(), f[5].text.toString(), f[6].text.toString()))
+                customerMaster(false)
+            }.setNegativeButton("CANCEL", null).show()
     }
 
     private fun itemMaster(push: Boolean = true) {
-        if (push) { navigate("items") { itemMaster(false) }; return }
-        refresh(); val v = root("Item / Product Master", "HSN • description • unit • GST • rate"); v.addView(button("＋  Add New Item") { itemDialog() }); items.forEach { it -> v.addView(card(it.name, "HSN ${it.hsn} • ${it.unit} • GST ${it.gst}% • ₹${it.defaultRate}", "📦", cyan) { itemDialog(it) }) }
+        if (push) { render("items", true); return }
+        refresh()
+        val v = root("Item / Product Master", "HSN • description choices • GST • default rate")
+        v.addView(action("＋  ADD ITEM", "Save item data once, reuse on every invoice", cyan) { itemDialog() })
+        addGap(v)
+        items.forEach { i ->
+            v.addView(card(i.name, "HSN ${i.hsn} • ${i.unit} • GST ${i.gst}% • ₹${i.defaultRate}", "📦", green) { itemDialog(i) })
+            addGap(v, 6)
+        }
     }
 
     private fun itemDialog(existing: Item? = null) {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 8, 0) }
-        val fields = listOf(input("Item name"), input("Saved descriptions — separate choices with |"), input("HSN code"), input("Unit (Nos/Kg/Mtr/etc.)"), input("GST %"), input("Default rate"))
-        existing?.let { fields[0].setText(it.name); fields[1].setText(it.description); fields[2].setText(it.hsn); fields[3].setText(it.unit); fields[4].setText(it.gst.toString()); fields[5].setText(it.defaultRate.toString()) }
-        fields.forEach { f -> box.addView(f, LinearLayout.LayoutParams(-1, 52)) }
-        AlertDialog.Builder(this).setTitle(if (existing == null) "Add Item" else "Edit Item").setView(box).setPositiveButton("Save") { _, _ -> if (existing == null) db.addItem(Item(0, fields[0].text.toString(), fields[1].text.toString(), fields[2].text.toString(), fields[3].text.toString().ifBlank { "Nos" }, fields[4].text.toString().toDoubleOrNull() ?: 0.0, fields[5].text.toString().toDoubleOrNull() ?: 0.0)); refresh(); itemMaster(false) }.setNegativeButton("Cancel", null).show()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        val f = listOf(field("Item name", existing?.name ?: ""), field("Description choices (use | between choices)", existing?.description ?: ""), field("HSN code", existing?.hsn ?: ""), field("Unit", existing?.unit ?: "Nos"), field("GST %", existing?.gst?.toString() ?: "18"), field("Default rate", existing?.defaultRate?.toString() ?: "0"))
+        f.forEach { box.addView(it, LinearLayout.LayoutParams(-1, dp(52))); addGap(box, 5) }
+        AlertDialog.Builder(this).setTitle(if (existing == null) "Add Item" else "Edit Item").setView(box)
+            .setPositiveButton("SAVE") { _, _ ->
+                if (f[0].text.toString().trim().isEmpty()) { toast("Item name is required"); return@setPositiveButton }
+                db.addItem(Item(0, f[0].text.toString(), f[1].text.toString(), f[2].text.toString(), f[3].text.toString().ifBlank { "Nos" }, f[4].text.toString().toDoubleOrNull() ?: 0.0, f[5].text.toString().toDoubleOrNull() ?: 0.0))
+                itemMaster(false)
+            }.setNegativeButton("CANCEL", null).show()
     }
 
-    private fun newBill(preset: String? = null, push: Boolean = true) {
-        if (push) { navigate("newbill") { newBill(preset, false) }; return }
-        refresh(); lines.clear(); selectedCustomer = null; val v = root("New Document", "Step 1 of 3 • Customer & document details")
-        val type = Spinner(this); val types = arrayOf("Invoice", "Delivery Challan", "Proforma Invoice", "Quotation"); type.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, types); preset?.let { type.setSelection(types.indexOf(it).coerceAtLeast(0)) }
-        v.addView(label("DOCUMENT TYPE", 11f, muted, true)); v.addView(type)
-        val party = Spinner(this); party.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, customers.map { it.name }.ifEmpty { listOf("No customers — add one first") }); v.addView(label("CUSTOMER / PARTY", 11f, muted, true)); v.addView(party)
-        val tax = Spinner(this); tax.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, arrayOf("CGST + SGST", "IGST", "No Tax")); v.addView(label("TAX MODE", 11f, muted, true)); v.addView(tax)
-        v.addView(label("ITEM LINES", 11f, muted, true)); val linesBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; v.addView(linesBox)
-        v.addView(button("＋  Add Item Line") { if (items.isEmpty()) toast("Add items in Item Master first") else lineDialog(linesBox) })
-        v.addView(button("Next  →  Review & Generate") { if (customers.isEmpty() || items.isEmpty() || lines.isEmpty() || party.selectedItemPosition < 0) toast("Select customer and add at least one item") else { selectedCustomer = customers[party.selectedItemPosition]; val document = type.selectedItem.toString(); val number = if (document == "Invoice") Numbering.next(this) else document.uppercase(Locale.US).replace(" ", "-") + "/" + Numbering.financialYear() + "/" + System.currentTimeMillis().toString().takeLast(5); val bill = Bill(0, document, number, Numbering.date(), selectedCustomer!!, lines.toList(), if (tax.selectedItemPosition == 1) "IGST" else if (tax.selectedItemPosition == 2) "NONE" else "CGST_SGST", System.currentTimeMillis()); db.saveBill(bill.type, bill.number, bill.date, bill.customer.id, bill.taxMode, bill.lines); generateFiles(bill) } })
+    private fun newInvoice(push: Boolean = true) {
+        if (push) { render("invoice", true); return }
+        refresh()
+        val v = root("Create Invoice", "Step 1 • document details • customer • items")
+        val number = Numbering.next(this)
+        val date = Numbering.date()
+        val note = field("Delivery Note")
+        val destination = field("Destination")
+        val customer = Spinner(this)
+        customer.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, customers.map { it.name }.ifEmpty { listOf("＋ Add customer first") })
+        v.addView(section("Invoice identity"))
+        v.addView(infoCard("INVOICE NUMBER", number, primary))
+        v.addView(infoCard("DATE", date, surface2))
+        v.addView(note, LinearLayout.LayoutParams(-1, dp(52))); addGap(v, 6)
+        v.addView(destination, LinearLayout.LayoutParams(-1, dp(52))); addGap(v, 4)
+        v.addView(section("Customer / party"))
+        v.addView(customer, LinearLayout.LayoutParams(-1, dp(52)))
+        v.addView(section("Tax mode"))
+        val tax = Spinner(this)
+        tax.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, arrayOf("CGST + SGST", "IGST", "No Tax"))
+        v.addView(tax, LinearLayout.LayoutParams(-1, dp(52)))
+        v.addView(section("Invoice items"))
+        val lineBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        v.addView(lineBox)
+        val add = action("＋  ADD ITEM LINE", "Select item, description, quantity, rate and discount", cyan) {
+            if (items.isEmpty()) toast("First add an item in Item Master") else lineDialog(lineBox)
+        }
+        v.addView(add)
+        addGap(v, 10)
+        v.addView(action("GENERATE INVOICE  →", "Writes data into the exact Excel template cells", green) {
+            if (customers.isEmpty()) { toast("Add a customer first"); return@action }
+            if (lineBox.childCount == 0) { toast("Add at least one item line"); return@action }
+            val c = customers[customer.selectedItemPosition.coerceIn(0, customers.lastIndex)]
+            val mode = when (tax.selectedItemPosition) { 1 -> "IGST"; 2 -> "NONE"; else -> "CGST_SGST" }
+            val bill = Bill(0, "Invoice", number, date, c, currentLines, mode, System.currentTimeMillis(), note.text.toString(), destination.text.toString())
+            db.saveBill(bill.type, bill.number, bill.date, bill.customer.id, bill.taxMode, bill.lines)
+            generateInvoice(bill)
+        })
     }
+
+    private var currentLines = mutableListOf<BillLine>()
 
     private fun lineDialog(parent: LinearLayout) {
-        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 0, 8, 0) }; val sp = Spinner(this); sp.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items.map { it.name }); val desc = Spinner(this); val qty = input("Quantity"); val rate = input("Rate"); val discount = input("Discount")
-        sp.onItemSelectedListener = object : AdapterView.OnItemSelectedListener { override fun onNothingSelected(p: AdapterView<*>?) {}; override fun onItemSelected(p: AdapterView<*>?, view: View?, pos: Int, id: Long) { val item = items.getOrNull(pos) ?: return; val choices = item.description.split('|').map { it.trim() }.filter { it.isNotBlank() }.ifEmpty { listOf(item.name) }; desc.adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, choices); rate.setText(item.defaultRate.toString()) } }
-        box.addView(label("ITEM", 11f, muted, true)); box.addView(sp); box.addView(label("DESCRIPTION — SELECT SAVED CHOICE", 11f, muted, true)); box.addView(desc); box.addView(qty); box.addView(rate); box.addView(discount)
-        AlertDialog.Builder(this).setTitle("Add Item Line").setView(box).setPositiveButton("Add") { _, _ -> val item = items[sp.selectedItemPosition]; val d = desc.selectedItem?.toString().orEmpty().ifBlank { item.description }; lines.add(BillLine(item, d, qty.text.toString().toDoubleOrNull() ?: 1.0, rate.text.toString().toDoubleOrNull() ?: item.defaultRate, discount.text.toString().toDoubleOrNull() ?: 0.0)); parent.addView(label("${lines.size}. ${item.name} • ${lines.last().qty} × ₹${lines.last().rate} • HSN ${item.hsn}", 14f, text)) }.setNegativeButton("Cancel", null).show()
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(8), 0, dp(8), 0) }
+        val item = Spinner(this)
+        item.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, items.map { it.name })
+        val desc = Spinner(this)
+        val qty = field("Quantity", "1")
+        val rate = field("Rate")
+        val discount = field("Discount", "0")
+        fun loadDescription(pos: Int) {
+            val it = items.getOrNull(pos) ?: return
+            val choices = it.description.split('|').map { x -> x.trim() }.filter { x -> x.isNotEmpty() }.ifEmpty { listOf(it.name) }
+            desc.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, choices)
+            rate.setText(it.defaultRate.toString())
+        }
+        item.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+            override fun onItemSelected(p: AdapterView<*>?, view: View?, pos: Int, id: Long) { loadDescription(pos) }
+        }
+        box.addView(item); addGap(box, 5); box.addView(desc); addGap(box, 5); box.addView(qty, LinearLayout.LayoutParams(-1, dp(52))); addGap(box, 5); box.addView(rate, LinearLayout.LayoutParams(-1, dp(52))); addGap(box, 5); box.addView(discount, LinearLayout.LayoutParams(-1, dp(52)))
+        AlertDialog.Builder(this).setTitle("Add Invoice Item").setView(box).setPositiveButton("ADD") { _, _ ->
+            val it = items[item.selectedItemPosition]
+            val line = BillLine(it, desc.selectedItem?.toString() ?: it.name, qty.text.toString().toDoubleOrNull() ?: 1.0, rate.text.toString().toDoubleOrNull() ?: it.defaultRate, discount.text.toString().toDoubleOrNull() ?: 0.0)
+            currentLines.add(line)
+            val row = card("${currentLines.size}. ${it.name}", "${line.qty} ${it.unit} × ₹${line.rate} • GST ${it.gst}% • taxable ₹${String.format(Locale.US, "%.2f", line.taxable)}", "•", primary) {}
+            parent.addView(row); addGap(parent, 5)
+        }.setNegativeButton("CANCEL", null).show()
     }
 
-    private fun generateFiles(bill: Bill) { if (!templateFile.exists()) { toast("Import your Excel invoice template in Settings first"); settings(false); return }; val dir = getExternalFilesDir("Billing") ?: filesDir; val safe = bill.number.replace('/', '_'); val x = File(dir, "$safe.xlsx"); XlsxGenerator.generate(this, templateFile, x, bill); toast("Generated ${x.name}"); share(x, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") }
+    private fun infoCard(k: String, value: String, color: Int): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL; setPadding(dp(15), dp(10), dp(15), dp(10)); background = rounded(color, 13)
+        addView(text(k, 9f, Color.WHITE, true)); addView(text(value, 17f, Color.WHITE, true))
+        val lp = LinearLayout.LayoutParams(-1, dp(66)); lp.setMargins(0, 0, 0, dp(6)); layoutParams = lp
+    }
 
-    private fun history(push: Boolean = true) { if (push) { navigate("history") { history(false) }; return }; val v = root("Bills & History", "All documents • newest first"); v.addView(input("Search invoice no., customer or type…")); db.recentBills().forEach { r -> v.addView(card(r[0].toString(), "${r[1]} • ${r[2]} • ${r[3]} • Taxable ₹${r[4]}", "🧾", purple) {}) } }
-    private fun report(push: Boolean = true) { if (push) { navigate("reports") { report(false) }; return }; val v = root("Reports / Summary", "Business overview • FY ${Numbering.financialYear()}"); val b = db.recentBills(); val total = b.sumOf { it[4].toDoubleOrNull() ?: 0.0 }; v.addView(card("Total Bills", b.size.toString(), "🧾", blue) {}); v.addView(card("Taxable Value", "₹${String.format(Locale.US, "%.2f", total)}", "₹", green) {}); v.addView(card("Customers", customers.size.toString(), "👥", cyan) {}); v.addView(card("Items", items.size.toString(), "📦", orange) {}) }
-    private fun settings(push: Boolean = true) { if (push) { navigate("settings") { settings(false) }; return }; val v = root("Settings / Excel Template", "Company, numbering and output controls"); v.addView(card("Excel Template", if (templateFile.exists()) "Imported ✓ • master format ready" else "Not imported yet", "▣", green) { pickTemplate() }); v.addView(card("Invoice Numbering", "IE/${Numbering.financialYear()}/16 • automatic sequence", "#", blue) { val e = input("Next invoice number"); e.setText("16"); AlertDialog.Builder(this).setTitle("Invoice numbering").setView(e).setPositiveButton("Save") { _, _ -> Numbering.setInitialSequence(this, e.text.toString().toIntOrNull() ?: 16); toast("Next sequence saved") }.setNegativeButton("Cancel", null).show() }); v.addView(label("OUTPUT", 11f, muted, true)); v.addView(button("Import / Replace Excel Invoice Template") { pickTemplate() }); v.addView(label("The workbook stays the master visual format. The app fills its cells; it does not redesign your bill.", 12f, muted)) }
+    private fun generateInvoice(bill: Bill) {
+        if (!templateFile.exists()) {
+            toast("Excel template not found. Open Settings → Import Excel Template.")
+            return
+        }
+        try {
+            val out = File(getExternalFilesDir(null), "${bill.number.replace('/', '_')}.xlsx")
+            XlsxGenerator.generate(this, templateFile, out, bill)
+            AlertDialog.Builder(this).setTitle("Invoice Generated ✓").setMessage("Invoice: ${bill.number}\nSaved as:\n${out.absolutePath}")
+                .setPositiveButton("OK") { _, _ -> showHome(false) }.show()
+        } catch (e: Exception) {
+            toast("Excel generation failed: ${e.message ?: "unknown error"}")
+        }
+    }
 
-    private fun pickTemplate() { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply { type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"; addCategory(Intent.CATEGORY_OPENABLE) }, 501) }
-    override fun onActivityResult(req: Int, res: Int, data: Intent?) { super.onActivityResult(req, res, data); if (req == 501 && res == RESULT_OK && data?.data != null) { contentResolver.openInputStream(data.data!!)?.use { input -> FileOutputStream(templateFile).use { input.copyTo(it) } }; toast("Excel template imported ✓"); settings(false) } }
-    private fun share(f: File, mime: String) { try { val uri = androidx.core.content.FileProvider.getUriForFile(this, packageName + ".provider", f); startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply { type = mime; putExtra(Intent.EXTRA_STREAM, uri); addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) }, "Share generated bill")) } catch (_: Exception) { toast("File created: ${f.absolutePath}") } }
-    private fun toast(s: String) { Toast.makeText(this, s, Toast.LENGTH_LONG).show() }
+    private fun history(push: Boolean = true) {
+        if (push) { render("history", true); return }
+        val v = root("Bills & History", "Latest 100 invoice records")
+        val list = db.recentBills()
+        if (list.isEmpty()) v.addView(infoCard("NO INVOICES", "Create your first invoice", surface2))
+        list.forEach { row ->
+            val c = card(row[0], "${row[2]} • ${row[3]} • Taxable ₹${row[4]}", "🧾", purple) { toast("Invoice ${row[0]} saved in history") }
+            v.addView(c); addGap(v, 6)
+        }
+    }
+
+    private fun reports(push: Boolean = true) {
+        if (push) { render("reports", true); return }
+        val v = root("Reports / Summary", "Invoice-only financial overview")
+        val list = db.recentBills()
+        var taxable = 0.0
+        list.forEach { taxable += it[4].toDoubleOrNull() ?: 0.0 }
+        v.addView(infoCard("TOTAL INVOICES", list.size.toString(), primary))
+        v.addView(infoCard("RECORDED TAXABLE VALUE", "₹${String.format(Locale.US, "%.2f", taxable)}", green))
+        v.addView(infoCard("FINANCIAL YEAR", Numbering.financialYear(), purple))
+    }
+
+    private fun settings(push: Boolean = true) {
+        if (push) { render("settings", true); return }
+        val v = root("Settings / Excel Template", "Invoice template is the source of truth")
+        v.addView(infoCard("REQUIRED CELL MAPPING", "Invoice No. → I4\nDate → K5\nDelivery Note → I6\nDestination → K18\nItems → B21:B32\nHSN → F21:F32\nQty → G21:G32\nSize → H21:H32\nRate → I21:I32\nGST → J21:J32\nUnit → K21:K32\nAmount → L21:L32\nTotals → L33:L35", surface2))
+        addGap(v)
+        v.addView(action("IMPORT / REPLACE EXCEL TEMPLATE", "Use the exact invoice workbook you provided", primary) { toast("Template import UI is ready; connect Android file picker in the next build step") })
+        addGap(v)
+        v.addView(action("INVOICE NUMBERING", "Format: IE/${Numbering.financialYear()}/16 and onward", green) { numberingDialog() })
+    }
+
+    private fun numberingDialog() {
+        val e = field("Next invoice sequence", "16")
+        AlertDialog.Builder(this).setTitle("Invoice numbering").setView(e).setPositiveButton("SAVE") { _, _ -> Numbering.setInitialSequence(this, e.text.toString().toIntOrNull() ?: 16); toast("Next sequence saved") }.setNegativeButton("CANCEL", null).show()
+    }
+
+    private fun duplicateLatest() {
+        val last = db.recentBills().firstOrNull()
+        if (last == null) toast("No invoice available to duplicate") else toast("Duplicate workflow will start from ${last[0]}")
+    }
+
+    private fun toast(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 }
