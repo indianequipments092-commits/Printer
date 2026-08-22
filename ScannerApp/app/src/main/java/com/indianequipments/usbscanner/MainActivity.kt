@@ -88,7 +88,7 @@ class MainActivity : Activity() {
         }
         content = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(18), dp(38), dp(18), dp(18))
+            setPadding(dp(18), dp(12), dp(18), dp(18))
         }
         val scroll = ScrollView(this).apply {
             isFillViewport = true
@@ -102,7 +102,12 @@ class MainActivity : Activity() {
             background = panel()
         }
         root.addView(nav, LinearLayout.LayoutParams(-1, dp(82)))
+        root.setOnApplyWindowInsetsListener { _, insets ->
+            content.setPadding(dp(18), insets.systemWindowInsetTop + dp(12), dp(18), dp(18))
+            insets
+        }
         setContentView(root)
+        root.requestApplyInsets()
         renderTab(0)
     }
 
