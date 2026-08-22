@@ -7,6 +7,11 @@ on:
     paths:
       - 'BillingApp/**'
       - '.github/workflows/build-billing-app.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'BillingApp/**'
+      - '.github/workflows/build-billing-app.yml'
 
 jobs:
   build:
