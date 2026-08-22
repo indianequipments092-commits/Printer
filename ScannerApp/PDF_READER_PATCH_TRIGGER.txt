@@ -1,0 +1,1 @@
+Temporary trigger for the advanced PDF Reader patch workflow. This file can be removed after the workflow commits the actual app changes.
