@@ -22,17 +22,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Fix home screen top spacing
+      - name: Apply PDF Reader and UI fixes
         working-directory: .
         run: |
-          python3 .github/scripts/fix_home_top_spacing.py
-          if git diff --quiet -- ScannerApp/app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt; then
-            echo "Home top spacing already fixed"
+          python3 .github/scripts/apply_pdf_reader.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ScannerApp/app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt \
+                  ScannerApp/app/src/main/java/com/indianequipments/usbscanner/PdfReaderActivity.kt \
+                  ScannerApp/app/src/main/AndroidManifest.xml \
+                  ScannerApp/app/src/main/res/drawable/ic_launcher.xml
+          if git diff --cached --quiet; then
+            echo "PDF Reader and UI fixes already applied"
           else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add ScannerApp/app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt
-            git commit -m "Fix home title top spacing"
+            git commit -m "Fix PDF Reader interactions and add app icon"
             git push origin HEAD:main
           fi
 
