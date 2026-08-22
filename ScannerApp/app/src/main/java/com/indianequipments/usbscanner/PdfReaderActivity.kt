@@ -9,12 +9,14 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.ParcelFileDescriptor
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.widget.*
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.Executors
+import kotlin.math.abs
 import kotlin.math.max
 
 class PdfReaderActivity : Activity() {
@@ -32,6 +34,7 @@ class PdfReaderActivity : Activity() {
     private lateinit var zoomLabel: TextView
     private lateinit var loading: ProgressBar
     private var pageViews = mutableListOf<ImageView>()
+    private var baseSizes = mutableListOf<Pair<Int, Int>>()
     private var scaleDetector: ScaleGestureDetector? = null
 
     override fun onCreate(state: Bundle?) {
@@ -50,6 +53,13 @@ class PdfReaderActivity : Activity() {
         if (incoming != null) openUri(incoming) else choosePdf()
     }
 
+    override fun dispatchTouchEvent(event: MotionEvent): Boolean {
+        // Receive the complete gesture stream so pinch-to-zoom works even while
+        // the PDF is inside the normal Android ScrollView.
+        scaleDetector?.onTouchEvent(event)
+        return super.dispatchTouchEvent(event)
+    }
+
     override fun onDestroy() {
         executor.shutdownNow()
         closePdf()
@@ -60,15 +70,21 @@ class PdfReaderActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.rgb(8, 12, 20))
-            setPadding(dp(0), dp(28), dp(0), dp(0))
+            setPadding(dp(0), dp(8), dp(0), dp(0))
+            setOnApplyWindowInsetsListener { _, insets ->
+                // Keep the title and every top control below the status bar / front camera.
+                setPadding(dp(0), insets.systemWindowInsetTop + dp(8), dp(0), insets.systemWindowInsetBottom)
+                insets
+            }
         }
+
         val toolbar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(10), dp(8), dp(10), dp(8))
+            setPadding(dp(10), dp(6), dp(10), dp(6))
             background = panel()
         }
-        toolbar.addView(button("‹", 44) { finish() })
+        toolbar.addView(button("‹", 46) { finish() })
         toolbar.addView(TextView(this).apply {
             text = "PDF Reader"
             textSize = 19f
@@ -76,8 +92,12 @@ class PdfReaderActivity : Activity() {
             setTextColor(Color.WHITE)
             setPadding(dp(8), 0, dp(6), 0)
         }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        toolbar.addView(button("↗", 44) { sharePdf() })
-        toolbar.addView(button("＋", 44) { choosePdf() })
+        toolbar.addView(button("⟳", 46) {
+            rotation = (rotation + 90f) % 360f
+            pageViews.forEach { it.rotation = rotation }
+        })
+        toolbar.addView(button("↗", 46) { sharePdf() })
+        toolbar.addView(button("＋", 46) { choosePdf() })
         root.addView(toolbar)
 
         val info = LinearLayout(this).apply {
@@ -99,13 +119,15 @@ class PdfReaderActivity : Activity() {
         info.addView(zoomLabel)
         root.addView(info)
 
-        val viewerFrame = FrameLayout(this).apply { setBackgroundColor(Color.rgb(18, 24, 34)) }
+        val viewerFrame = FrameLayout(this).apply {
+            setBackgroundColor(Color.rgb(18, 24, 34))
+        }
         pageScroll = ScrollView(this).apply {
             isFillViewport = false
             isSmoothScrollingEnabled = true
             overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            setPadding(dp(8), dp(8), dp(72), dp(8))
-            setOnTouchListener { _, event -> scaleDetector?.onTouchEvent(event); false }
+            setPadding(dp(8), dp(8), dp(68), dp(8))
+            setOnScrollChangeListener { _, _, _, _, _ -> updatePageLabel() }
         }
         pageColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -114,6 +136,8 @@ class PdfReaderActivity : Activity() {
         pageScroll.addView(pageColumn, LinearLayout.LayoutParams(-1, -2))
         viewerFrame.addView(pageScroll, FrameLayout.LayoutParams(-1, -1))
 
+        // Right-side page rail. Page numbers are tappable; the main PDF is
+        // continuously scrollable, so there are no bottom page arrows.
         val railScroll = ScrollView(this).apply {
             isVerticalScrollBarEnabled = false
             setBackgroundColor(Color.rgb(12, 18, 28))
@@ -125,37 +149,38 @@ class PdfReaderActivity : Activity() {
         }
         railScroll.addView(pageRail, LinearLayout.LayoutParams(-1, -2))
         viewerFrame.addView(railScroll, FrameLayout.LayoutParams(dp(60), -1, Gravity.END))
+
         loading = ProgressBar(this).apply { visibility = View.GONE }
         viewerFrame.addView(loading, FrameLayout.LayoutParams(dp(44), dp(44), Gravity.CENTER))
         root.addView(viewerFrame, LinearLayout.LayoutParams(-1, 0, 1f))
 
-        val bottom = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            setPadding(dp(8), dp(8), dp(8), dp(8))
-            background = panel()
-        }
-        bottom.addView(button("FIT", 72) { setZoom(1f) })
-        bottom.addView(button("ROTATE", 84) {
-            rotation = (rotation + 90f) % 360f
-            pageViews.forEach { it.rotation = rotation }
-        })
-        bottom.addView(button("SHARE", 78) { sharePdf() })
-        root.addView(bottom)
+        // Deliberately no bottom controls: swipe/scroll through pages and pinch
+        // with two fingers to zoom from 50% up to 10000%.
         setContentView(root)
+        root.requestApplyInsets()
     }
 
     private fun choosePdf() {
-        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "application/pdf"
-        }, 9001)
+        try {
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/pdf"
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            }, 9001)
+        } catch (_: Throwable) {
+            Toast.makeText(this, "No PDF picker is available", Toast.LENGTH_SHORT).show()
+        }
     }
 
     @Deprecated("Compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == 9001 && resultCode == RESULT_OK && data?.data != null) openUri(data.data!!)
+        if (requestCode == 9001 && resultCode == RESULT_OK && data?.data != null) {
+            try {
+                data.data?.let { contentResolver.takePersistableUriPermission(it, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            } catch (_: Throwable) { }
+            openUri(data.data!!)
+        }
     }
 
     private fun openUri(uri: Uri) {
@@ -198,6 +223,7 @@ class PdfReaderActivity : Activity() {
         pageColumn.removeAllViews()
         pageRail.removeAllViews()
         pageViews.clear()
+        baseSizes.clear()
         pageLabel.text = "Page 1 / ${r.pageCount}"
         executor.execute {
             try {
@@ -217,7 +243,10 @@ class PdfReaderActivity : Activity() {
                         addPageView(index, bitmap)
                         if (index == r.pageCount - 1) {
                             loading.visibility = View.GONE
-                            pageColumn.post { updatePageLabel() }
+                            pageScroll.post {
+                                setZoom(1f)
+                                updatePageLabel()
+                            }
                         }
                     }
                 }
@@ -234,36 +263,38 @@ class PdfReaderActivity : Activity() {
         val image = ImageView(this).apply {
             setImageBitmap(bitmap)
             adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
+            scaleType = ImageView.ScaleType.FIT_XY
             setBackgroundColor(Color.WHITE)
             rotation = this@PdfReaderActivity.rotation
-            setOnTouchListener { _, event -> scaleDetector?.onTouchEvent(event); false }
+            isClickable = false
         }
         pageColumn.addView(image, LinearLayout.LayoutParams(-1, -2).apply {
             setMargins(dp(4), dp(4), dp(4), dp(10))
         })
         pageViews.add(image)
-        val number = Button(this).apply {
+        baseSizes.add(bitmap.width to bitmap.height)
+
+        val number = TextView(this).apply {
             text = (index + 1).toString()
-            textSize = 11f
+            textSize = 12f
+            gravity = Gravity.CENTER
+            typeface = Typeface.DEFAULT_BOLD
             setTextColor(Color.WHITE)
-            isAllCaps = false
-            minWidth = 0
-            minimumWidth = 0
-            minHeight = 0
-            minimumHeight = 0
-            setPadding(0, dp(8), 0, dp(8))
             background = rounded(Color.rgb(30, 40, 55), 12)
+            isClickable = true
+            isFocusable = true
             setOnClickListener { scrollToPage(index) }
         }
-        pageRail.addView(number, LinearLayout.LayoutParams(dp(48), dp(46)).apply {
+        pageRail.addView(number, LinearLayout.LayoutParams(dp(48), dp(44)).apply {
             setMargins(0, dp(3), 0, dp(3))
         })
     }
 
     private fun scrollToPage(index: Int) {
         if (index !in pageViews.indices) return
-        pageScroll.post { pageScroll.smoothScrollTo(0, max(0, pageViews[index].top)) }
+        pageScroll.post {
+            pageScroll.smoothScrollTo(0, max(0, pageViews[index].top - dp(8)))
+        }
         pageLabel.text = "Page ${index + 1} / ${pageViews.size}"
     }
 
@@ -273,24 +304,40 @@ class PdfReaderActivity : Activity() {
         var best = 0
         var bestDistance = Int.MAX_VALUE
         pageViews.forEachIndexed { i, view ->
-            val distance = kotlin.math.abs(view.top - scrollY)
-            if (distance < bestDistance) { bestDistance = distance; best = i }
+            val distance = abs(view.top - scrollY)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                best = i
+            }
         }
         pageLabel.text = "Page ${best + 1} / ${pageViews.size}"
         zoomLabel.text = "${(zoom * 100).toInt()}% • Pinch to zoom"
     }
 
     private fun setZoom(value: Float) {
-        zoom = value.coerceIn(0.5f, 100f)
-        pageColumn.pivotX = 0f
-        pageColumn.pivotY = 0f
-        pageColumn.scaleX = zoom
-        pageColumn.scaleY = zoom
+        zoom = value.coerceIn(0.5f, 10000f)
+        if (pageViews.isNotEmpty()) {
+            val availableWidth = (pageScroll.width - dp(76)).coerceAtLeast(dp(120))
+            pageViews.forEachIndexed { index, image ->
+                val original = baseSizes[index]
+                val fitWidth = minOf(original.first, availableWidth)
+                val fitHeight = (original.second.toFloat() * fitWidth / original.first).toInt().coerceAtLeast(1)
+                val lp = image.layoutParams as LinearLayout.LayoutParams
+                lp.width = (fitWidth * zoom).toInt().coerceAtLeast(1)
+                lp.height = (fitHeight * zoom).toInt().coerceAtLeast(1)
+                image.layoutParams = lp
+                image.rotation = rotation
+            }
+            pageColumn.requestLayout()
+        }
         zoomLabel.text = "${(zoom * 100).toInt()}% • Pinch to zoom"
     }
 
     private fun sharePdf() {
-        val uri = sourceUri ?: return
+        val uri = sourceUri ?: run {
+            Toast.makeText(this, "Open a PDF first", Toast.LENGTH_SHORT).show()
+            return
+        }
         try {
             startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).apply {
                 type = "application/pdf"
@@ -333,8 +380,12 @@ class PdfReaderActivity : Activity() {
         minimumHeight = 0
         setPadding(dp(8), dp(8), dp(8), dp(8))
         background = rounded(Color.rgb(30, 40, 55), 14)
+        isClickable = true
+        isFocusable = true
         setOnClickListener { click() }
-        layoutParams = LinearLayout.LayoutParams(dp(width), dp(48)).apply { setMargins(dp(4), 0, dp(4), 0) }
+        layoutParams = LinearLayout.LayoutParams(dp(width), dp(48)).apply {
+            setMargins(dp(4), 0, dp(4), 0)
+        }
     }
 
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
