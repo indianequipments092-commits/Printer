@@ -1,0 +1,62 @@
+package com.indianequipments.billing
+
+import android.content.Context
+import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipInputStream
+import java.util.zip.ZipOutputStream
+import kotlin.math.round
+
+object XlsxGenerator {
+    private fun esc(v:String)=v.replace("&","&amp;").replace("<","&lt;").replace(">","&gt;").replace("\"","&quot;").replace("'","&apos;")
+    private fun cell(xml:String, ref:String, value:String?, numeric:Boolean=false):String {
+        val pattern=Regex("<c r=\""+Regex.escape(ref)+"\"[^>]*(?:/>|>.*?</c>)")
+        val old=pattern.find(xml)?.value
+        val style=old?.let{Regex("\\bs=\"([^\"]+)\"").find(it)?.groupValues?.get(1)}
+        val attr=if(style!=null) " s=\"$style\"" else ""
+        val body=when {
+            value==null || value.isBlank() -> "<c r=\"$ref\"$attr/>"
+            numeric -> "<c r=\"$ref\"$attr><v>${esc(value)}</v></c>"
+            else -> "<c r=\"$ref\"$attr t=\"inlineStr\"><is><t>${esc(value)}</t></is></c>"
+        }
+        if(old!=null) return xml.replace(old,body)
+        val row=Regex("<row r=\"(\\d+)\"[^>]*>.*?</row>").findAll(xml).firstOrNull{it.groupValues[1]==ref.filter{c->c.isDigit()}}?.value
+        return if(row!=null) xml.replace(row,row.removeSuffix("</row>")+body+"</row>") else xml
+    }
+    private fun amount(v:Double)=String.format(java.util.Locale.US,"%.2f",v)
+
+    fun generate(context:Context, template:File, output:File, bill:Bill) {
+        val tmp=File.createTempFile("invoice-",".xlsx",context.cacheDir)
+        ZipInputStream(FileInputStream(template)).use{zin->ZipOutputStream(FileOutputStream(tmp)).use{zout->
+            while(true){ val e=zin.nextEntry ?: break; val bytes=zin.readBytes(); val name=e.name; val ne=ZipEntry(name); zout.putNextEntry(ne)
+                if(name=="xl/worksheets/sheet1.xml") {
+                    var xml=bytes.toString(Charsets.UTF_8)
+                    xml=cell(xml,"A1",bill.type)
+                    xml=cell(xml,"J3",bill.number)
+                    xml=cell(xml,"M3",bill.date)
+                    val c=bill.customer
+                    xml=cell(xml,"A13",c.name+"\n"+c.address)
+                    xml=cell(xml,"C16",c.gstin)
+                    xml=cell(xml,"C17",c.state+" - "+c.stateCode)
+                    xml=cell(xml,"C18",c.email)
+                    xml=cell(xml,"K17",c.state)
+                    var taxable=0.0; var gstTotal=0.0
+                    bill.lines.take(12).forEachIndexed{idx,line->
+                        val r=21+idx; val tax=line.taxable*line.item.gst/100.0; taxable+=line.taxable; gstTotal+=tax
+                        xml=cell(xml,"A$r",(idx+1).toString(),true); xml=cell(xml,"B$r",line.description.ifBlank{line.item.name}); xml=cell(xml,"F$r",line.item.hsn)
+                        xml=cell(xml,"G$r",amount(line.qty),true); xml=cell(xml,"H$r",line.item.unit); xml=cell(xml,"I$r",amount(line.rate),true); xml=cell(xml,"J$r",amount(line.item.gst),true); xml=cell(xml,"K$r",line.item.unit); xml=cell(xml,"L$r",amount(line.taxable),true)
+                    }
+                    for(idx in bill.lines.size.coerceAtMost(12) until 12){ val r=21+idx; listOf("A","B","F","G","H","I","J","K","L").forEach{col->xml=cell(xml,"$col$r",null)} }
+                    xml=cell(xml,"L33",amount(taxable),true); xml=cell(xml,"L34",amount(gstTotal),true); xml=cell(xml,"L35",amount(taxable+gstTotal),true)
+                    if(bill.taxMode=="IGST") { xml=cell(xml,"J34","IGST AMOUNT:"); xml=cell(xml,"L38","0.00",true); xml=cell(xml,"L39",amount(gstTotal),true); xml=cell(xml,"I38","0.00",true); xml=cell(xml,"K38","0.00",true) }
+                    else { val half=gstTotal/2; xml=cell(xml,"I38",amount(half),true);xml=cell(xml,"K38",amount(half),true);xml=cell(xml,"L38",amount(gstTotal),true);xml=cell(xml,"I39",amount(half),true);xml=cell(xml,"K39",amount(half),true);xml=cell(xml,"L39",amount(gstTotal),true) }
+                    zout.write(xml.toByteArray(Charsets.UTF_8))
+                } else zout.write(bytes)
+                zout.closeEntry()
+            }
+        }}
+        output.parentFile?.mkdirs(); FileInputStream(tmp).use{input->FileOutputStream(output).use{out->input.copyTo(out)}}; tmp.delete()
+    }
+}
