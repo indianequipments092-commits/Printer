@@ -5,6 +5,7 @@ on:
     paths:
       - 'ScannerApp/**'
       - '.github/workflows/build-scanner.yml'
+      - '.github/scripts/apply_ui_upgrades.py'
   workflow_dispatch:
 
 jobs:
@@ -24,7 +25,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      # PDF Reader feature has been completely removed; no PDF Reader patch script is run.
+      - name: Apply UI and image-edit fixes
+        run: python3 ../.github/scripts/apply_ui_upgrades.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Upload APK
