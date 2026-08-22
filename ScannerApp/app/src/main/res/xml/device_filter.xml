@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Intentionally broad: the app discovers USB devices and identifies scanner-class devices at runtime. -->
+    <!-- Canon MF3010: VID 0x04A9 / PID 0x2759. -->
+    <usb-device vendor-id="1193" product-id="10073" />
+    <!-- Keep generic scanner-class discovery for compatible devices. -->
     <usb-device class="6" />
 </resources>
