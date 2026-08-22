@@ -35,9 +35,13 @@ class BillingDb(context: Context) : SQLiteOpenHelper(context, "billing.db", null
         }
     }
 
-    fun addCustomer(c: Customer) = writableDatabase.insert("customers", null, android.content.ContentValues().apply {
+    private fun customerValues(c: Customer) = android.content.ContentValues().apply {
         put("name", c.name); put("gstin", c.gstin); put("address", c.address); put("state", c.state); put("state_code", c.stateCode); put("phone", c.phone); put("email", c.email)
-    })
+    }
+
+    fun addCustomer(c: Customer) = writableDatabase.insert("customers", null, customerValues(c))
+    fun updateCustomer(c: Customer): Int = writableDatabase.update("customers", customerValues(c), "id=?", arrayOf(c.id.toString()))
+    fun deleteCustomer(id: Long): Int = writableDatabase.delete("customers", "id=?", arrayOf(id.toString()))
 
     fun customers(): List<Customer> = readableDatabase.rawQuery("SELECT * FROM customers ORDER BY name COLLATE NOCASE", null).use { cur ->
         buildList {
@@ -45,19 +49,19 @@ class BillingDb(context: Context) : SQLiteOpenHelper(context, "billing.db", null
         }
     }
 
-    fun deleteCustomer(id: Long): Int = writableDatabase.delete("customers", "id=?", arrayOf(id.toString()))
-
-    fun addItem(i: Item) = writableDatabase.insert("items", null, android.content.ContentValues().apply {
+    private fun itemValues(i: Item) = android.content.ContentValues().apply {
         put("name", i.name); put("description", i.description); put("hsn", i.hsn); put("unit", i.unit); put("gst", i.gst); put("rate", i.defaultRate)
-    })
+    }
+
+    fun addItem(i: Item) = writableDatabase.insert("items", null, itemValues(i))
+    fun updateItem(i: Item): Int = writableDatabase.update("items", itemValues(i), "id=?", arrayOf(i.id.toString()))
+    fun deleteItem(id: Long): Int = writableDatabase.delete("items", "id=?", arrayOf(id.toString()))
 
     fun items(): List<Item> = readableDatabase.rawQuery("SELECT * FROM items ORDER BY name COLLATE NOCASE", null).use { cur ->
         buildList {
             while (cur.moveToNext()) add(Item(cur.getLong(0), cur.getString(1), cur.getString(2) ?: "", cur.getString(3) ?: "", cur.getString(4) ?: "Nos", cur.getDouble(5), cur.getDouble(6)))
         }
     }
-
-    fun deleteItem(id: Long): Int = writableDatabase.delete("items", "id=?", arrayOf(id.toString()))
 
     fun saveBill(type: String, number: String, date: String, customerId: Long, taxMode: String, lines: List<BillLine>, deliveryNote: String = "", destination: String = ""): Long {
         val db = writableDatabase
