@@ -125,7 +125,9 @@ class MainActivity : Activity() {
     }
 
     private fun renderHome() {
-        content.addView(title("USB SCANNER", "MAHA ADVANCED+ • PROFESSIONAL SCAN STUDIO"))
+        content.addView(title("USB SCANNER", "MAHA ADVANCED+ • PROFESSIONAL SCAN STUDIO"), LinearLayout.LayoutParams(-1, -2).apply {
+            setMargins(0, dp(24), 0, 0)
+        })
         val deviceCard = card()
         deviceCard.addView(TextView(this).apply {
             textSize = 12f
