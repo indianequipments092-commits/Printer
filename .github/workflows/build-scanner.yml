@@ -27,7 +27,7 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Apply Maha Advanced USB Scanner + Printex UI
-        run: python3 ../.github/scripts/upgrade_ui.py
+        run: cd .. && python3 .github/scripts/upgrade_ui.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Verify APK output
