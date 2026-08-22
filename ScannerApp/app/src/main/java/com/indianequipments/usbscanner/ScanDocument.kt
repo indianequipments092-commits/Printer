@@ -36,6 +36,12 @@ class ScanDocument(private val context: Context) {
         return file
     }
 
+    fun saveJpeg(bitmap: Bitmap, name: String = "scan_${System.currentTimeMillis()}.jpg"): File {
+        val file = File(context.getExternalFilesDir(null), name)
+        FileOutputStream(file).use { bitmap.compress(Bitmap.CompressFormat.JPEG, 95, it) }
+        return file
+    }
+
     fun savePdf(
         pages: List<Bitmap>,
         dpis: List<Int>,
