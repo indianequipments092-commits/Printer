@@ -2,13 +2,13 @@ package com.indianequipments.usbscanner
 
 import android.app.Activity
 import android.graphics.Bitmap
+import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.hardware.usb.UsbDevice
 
 class MainActivity : Activity() {
     private lateinit var usb: UsbScannerManager
@@ -53,22 +53,31 @@ class MainActivity : Activity() {
     private fun refreshDevices() {
         val all = usb.allDevices()
         val scanners = usb.scannerDevices()
-        deviceText.text = if (all.isEmpty()) "No USB device detected. Connect the scanner using a USB-OTG adapter." else
+        deviceText.text = if (all.isEmpty()) {
+            "No USB device detected. Connect the scanner using a USB-OTG adapter."
+        } else {
             all.joinToString("\n") { d ->
-                val scanner = if (scanners.any { it.deviceId == d.deviceId }) " [IMAGING/SCANNER CLASS]" else ""
+                val scanner = if (scanners.any { it.deviceId == d.deviceId }) " [SUPPORTED SCANNER]" else ""
                 "${d.productName ?: "USB device"}  VID ${d.vendorId} / PID ${d.productId}$scanner"
             }
-        status.text = "${scanners.size} scanner-class device(s) detected."
+        }
+        status.text = "${scanners.size} supported scanner device(s) detected."
     }
 
     private fun requestFirstScanner() {
         val device = usb.scannerDevices().firstOrNull()
-        if (device == null) { status.text = "No USB scanner-class device found."; return }
+        if (device == null) {
+            status.text = "No supported scanner detected."
+            return
+        }
         usb.requestPermission(device)
     }
 
     private fun connectDevice(device: UsbDevice) {
-        if (!usb.open(device)) { status.text = "Could not open the scanner USB interface."; return }
+        if (!usb.open(device)) {
+            status.text = "MF3010 detected, but no usable bulk USB interface was found."
+            return
+        }
         connectedDevice = device
         val protocol = ScannerProtocol(usb.connection()!!, usb.usbInterface()!!)
         val cap = protocol.probe()
@@ -76,8 +85,11 @@ class MainActivity : Activity() {
     }
 
     private fun runScan() {
-        if (connectedDevice == null) { status.text = "Connect the scanner first."; return }
-        status.text = "Scanner connected, but no verified model-specific scan backend is configured yet."
+        if (connectedDevice == null) {
+            status.text = "Connect the scanner first."
+            return
+        }
+        status.text = "MF3010 connected. Real scan backend is the next step; no unverified scan command is being sent."
     }
 
     private fun savePdf() {
