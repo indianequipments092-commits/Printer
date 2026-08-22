@@ -5,7 +5,7 @@ on:
     paths:
       - 'ScannerApp/**'
       - '.github/workflows/build-scanner.yml'
-      - '.github/scripts/apply_ui_upgrades.py'
+      - '.github/scripts/**'
   workflow_dispatch:
 
 jobs:
@@ -26,11 +26,11 @@ jobs:
         with:
           gradle-version: '8.7'
       - name: Apply UI and image-edit fixes
-        run: python3 ../.github/scripts/apply_ui_upgrades.py
+        run: python3 ../.github/scripts/apply_ui_upgrades_fixed.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: usb-scanner-debug-apk
-          path: ScannerApp/app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/debug/app-debug.apk
