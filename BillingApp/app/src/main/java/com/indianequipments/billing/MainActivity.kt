@@ -59,10 +59,6 @@ class MainActivity : Activity() {
                 requireNotNull(input) { "Unable to open selected Excel file" }
                 FileOutputStream(templateFile).use { output -> input.copyTo(output) }
             }
-            try {
-                val takeFlags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-                contentResolver.takePersistableUriPermission(uri, takeFlags)
-            } catch (_: Exception) { }
             toast("Excel invoice template imported successfully ✓")
             settings(false)
         } catch (e: Exception) {
@@ -109,7 +105,7 @@ class MainActivity : Activity() {
     private fun spinnerAdapter(values: List<String>): ArrayAdapter<String> = object : ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
             val tv = super.getView(position, convertView, parent) as TextView
-            tv.setTextColor(white); tv.textSize = 15f; tv.setPadding(dp(14), 0, dp(14), 0); tv.background = rounded(surface2, 12, Color.rgb(31, 57, 88)); return tv
+            tv.setTextColor(white); tv.textSize = 15f; tv.setPadding(dp(14), dp(8), dp(14), dp(8)); tv.background = rounded(surface2, 12, Color.rgb(31, 57, 88)); return tv
         }
         override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
             val tv = super.getDropDownView(position, convertView, parent) as TextView
@@ -131,7 +127,7 @@ class MainActivity : Activity() {
     }
 
     private fun root(title: String, sub: String = ""): LinearLayout {
-        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(28), dp(14), dp(18)); setBackgroundColor(bg) }
+        val outer = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(46), dp(14), dp(18)); setBackgroundColor(bg) }
         val bar = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val back = Button(this).apply { text = "‹"; textSize = 30f; setTextColor(white); background = rounded(Color.TRANSPARENT, 10); setOnClickListener { onBackPressed() } }
         bar.addView(back, LinearLayout.LayoutParams(dp(52), dp(52)))
@@ -314,10 +310,11 @@ class MainActivity : Activity() {
 
     private fun pickExcelTemplate() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            type = "*/*"
             putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "application/vnd.ms-excel", "application/octet-stream"))
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, false)
             addCategory(Intent.CATEGORY_OPENABLE)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
         startActivityForResult(intent, PICK_TEMPLATE)
     }
