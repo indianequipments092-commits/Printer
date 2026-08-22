@@ -139,9 +139,6 @@ class ScannerProtocol(
 
             onProgress(5, "Scanner warming up…")
 
-            // The first image request is a generation-2 request. Preserve any
-            // image bytes returned with the header; normally this first reply
-            // is only the 8-byte header.
             var block = requestImageBlock(0)
             lastBlock = (block.info and 0x38) != 0
 
@@ -156,12 +153,7 @@ class ScannerProtocol(
                     bytesReceived += copy
 
                     while (pendingLen >= lineSize && rowsWritten < height) {
-                        decodeRow(
-                            pending,
-                            width,
-                            channels,
-                            rowPixels
-                        )
+                        decodeRow(pending, width, channels, rowPixels)
                         bitmap.setPixels(rowPixels, 0, width, 0, rowsWritten, width, 1)
                         rowsWritten++
                         pendingLen -= lineSize
@@ -217,8 +209,7 @@ class ScannerProtocol(
 
     private fun executeSimple(command: Int) {
         val packet = makeCommand(command, 0)
-        val response = transact(packet, 2)
-        checkStatus(response)
+        checkStatus(transactExact(packet, 2))
     }
 
     private fun executeSelectSource() {
@@ -226,7 +217,7 @@ class ScannerProtocol(
         packet[HEADER_LEN] = 1 // flatbed
         packet[HEADER_LEN + 5] = 0
         finalizeChecksum(packet)
-        checkStatus(transact(packet, 2))
+        checkStatus(transactExact(packet, 2))
     }
 
     private fun executeScanParams(
@@ -238,8 +229,8 @@ class ScannerProtocol(
     ) {
         val packet = makeCommand(CMD_SCAN_PARAM, 0x2E)
         val data = HEADER_LEN
-        putBe16((dpi or 0x1000), packet, data + 0x04)
-        putBe16((dpi or 0x1000), packet, data + 0x06)
+        putBe16(dpi or 0x1000, packet, data + 0x04)
+        putBe16(dpi or 0x1000, packet, data + 0x06)
         putBe32(0, packet, data + 0x08)
         putBe32(0, packet, data + 0x0C)
         putBe32(rawWidth, packet, data + 0x10)
@@ -250,7 +241,7 @@ class ScannerProtocol(
         packet[data + 0x20] = 0xFF.toByte()
         packet[data + 0x23] = 0x81.toByte()
         finalizeChecksum(packet)
-        checkStatus(transact(packet, 2))
+        checkStatus(transactExact(packet, 2))
     }
 
     private fun requestImageBlock(flag: Int): ImageBlock {
@@ -259,7 +250,7 @@ class ScannerProtocol(
         packet[8] = flag.toByte()
         packet[10] = 0x06
 
-        val response = transact(packet, IMAGE_RESPONSE_LEN)
+        val response = transactAllowShort(packet, IMAGE_RESPONSE_LEN)
         if (response.size < IMAGE_HEADER_LEN) {
             throw ScannerException("Invalid image response from MF3010 (only ${response.size} bytes).")
         }
@@ -289,8 +280,7 @@ class ScannerProtocol(
     }
 
     private fun queryStatus() {
-        val response = transact(makeCommand(CMD_STATUS, 0), 14)
-        checkStatus(response)
+        checkStatus(transactExact(makeCommand(CMD_STATUS, 0), 14))
     }
 
     private fun finishSession() {
@@ -314,23 +304,23 @@ class ScannerProtocol(
         packet[packet.lastIndex] = ((-sum) and 0xFF).toByte()
     }
 
-    private fun transact(command: ByteArray, expectedLength: Int): ByteArray {
+    private fun writeCommand(command: ByteArray) {
         val out = bulkOut ?: throw ScannerException("USB bulk OUT endpoint unavailable.")
-        val input = bulkIn ?: throw ScannerException("USB bulk IN endpoint unavailable.")
-
         val written = connection.bulkTransfer(out, command, command.size, COMMAND_TIMEOUT_MS)
         if (written != command.size) {
             throw ScannerException("USB command write failed ($written/${command.size}).")
         }
+    }
 
+    private fun transactExact(command: ByteArray, expectedLength: Int): ByteArray {
+        val input = bulkIn ?: throw ScannerException("USB bulk IN endpoint unavailable.")
+        writeCommand(command)
         val response = ByteArray(expectedLength)
         var offset = 0
         var zeroReads = 0
         while (offset < expectedLength) {
             val n = connection.bulkTransfer(input, response, offset, expectedLength - offset, COMMAND_TIMEOUT_MS)
-            if (n < 0) {
-                throw ScannerException("Scanner response read failed (USB error $n).")
-            }
+            if (n < 0) throw ScannerException("Scanner response read failed (USB error $n).")
             if (n == 0) {
                 if (++zeroReads >= 3) throw ScannerException("Scanner response timed out.")
                 continue
@@ -339,6 +329,16 @@ class ScannerProtocol(
             offset += n
         }
         return response
+    }
+
+    private fun transactAllowShort(command: ByteArray, maxLength: Int): ByteArray {
+        val input = bulkIn ?: throw ScannerException("USB bulk IN endpoint unavailable.")
+        writeCommand(command)
+        val response = ByteArray(maxLength)
+        val n = connection.bulkTransfer(input, response, 0, maxLength, IMAGE_TIMEOUT_MS)
+        if (n < 0) throw ScannerException("Scanner image header read failed (USB error $n).")
+        if (n == 0) throw ScannerException("Scanner returned an empty image response.")
+        return response.copyOf(n)
     }
 
     private fun readFully(buffer: ByteArray, offset: Int, length: Int, timeoutMs: Int) {
