@@ -32,6 +32,7 @@ jobs:
           mkdir -p ../.github/assets
           cp .github/assets/app_logo.webp.b64 ../.github/assets/app_logo.webp.b64
           python3 .github/scripts/upgrade_ui.py
+          python3 .github/scripts/apply_icons.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Verify APK output
