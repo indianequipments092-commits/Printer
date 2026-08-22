@@ -38,7 +38,9 @@ class UsbScannerManager(private val context: Context) {
 
     fun unregister() { runCatching { context.unregisterReceiver(receiver) } }
 
-    fun scannerDevices(): List<UsbDevice> = usbManager.deviceList.values.filter { device -> device.interfaces.any { it.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE } }
+    private fun interfaces(device: UsbDevice): List<UsbInterface> = (0 until device.interfaceCount).map { device.getInterface(it) }
+
+    fun scannerDevices(): List<UsbDevice> = usbManager.deviceList.values.filter { device -> interfaces(device).any { it.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE } }
     fun allDevices(): List<UsbDevice> = usbManager.deviceList.values.toList()
 
     fun requestPermission(device: UsbDevice) {
@@ -48,7 +50,7 @@ class UsbScannerManager(private val context: Context) {
 
     fun open(device: UsbDevice): Boolean {
         close()
-        val intf = device.interfaces.firstOrNull { it.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE } ?: return false
+        val intf = interfaces(device).firstOrNull { it.interfaceClass == UsbConstants.USB_CLASS_STILL_IMAGE } ?: return false
         val conn = usbManager.openDevice(device) ?: return false
         if (!conn.claimInterface(intf, true)) { conn.close(); return false }
         connection = conn; interfaceClaimed = intf; return true
