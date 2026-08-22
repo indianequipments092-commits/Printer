@@ -97,13 +97,11 @@ class ScannerProtocol(
     fun bulkInEndpoint(): UsbEndpoint? = bulkIn
     fun bulkOutEndpoint(): UsbEndpoint? = bulkOut
 
-    /** Low-level verified bulk transfer helper. */
     fun transferOut(data: ByteArray, timeoutMs: Int = COMMAND_TIMEOUT_MS): Int {
         val endpoint = bulkOut ?: return -1
         return connection.bulkTransfer(endpoint, data, data.size, timeoutMs)
     }
 
-    /** Low-level verified bulk transfer helper. */
     fun transferIn(buffer: ByteArray, timeoutMs: Int = COMMAND_TIMEOUT_MS): Int {
         val endpoint = bulkIn ?: return -1
         return connection.bulkTransfer(endpoint, buffer, buffer.size, timeoutMs)
@@ -132,11 +130,9 @@ class ScannerProtocol(
         try {
             onProgress(2, "Preparing scanner…")
             queryStatus()
-
             executeSimple(CMD_START_SESSION)
             executeSelectSource()
-            executeScanParams(config.dpi, width, height, rawWidth, channels)
-
+            executeScanParams(config.dpi, height, rawWidth, channels)
             onProgress(5, "Scanner warming up…")
 
             var block = requestImageBlock(0)
@@ -145,8 +141,9 @@ class ScannerProtocol(
             while (true) {
                 val data = block.data
                 var offset = 0
-                while (offset < data.size) {
+                while (offset < data.size && rowsWritten < height) {
                     val copy = min(lineSize - pendingLen, data.size - offset)
+                    if (copy <= 0) break
                     System.arraycopy(data, offset, pending, pendingLen, copy)
                     pendingLen += copy
                     offset += copy
@@ -172,8 +169,8 @@ class ScannerProtocol(
                 lastBlock = (block.info and 0x38) != 0
             }
 
-            if (rowsWritten == 0) {
-                throw ScannerException("The scanner returned no image data.")
+            if (rowsWritten < height) {
+                throw ScannerException("Scan ended early: received $rowsWritten of $height image lines.")
             }
 
             onProgress(98, "Finishing scan…")
@@ -208,8 +205,7 @@ class ScannerProtocol(
         ((value + alignment - 1) / alignment) * alignment
 
     private fun executeSimple(command: Int) {
-        val packet = makeCommand(command, 0)
-        checkStatus(transactExact(packet, 2))
+        checkStatus(transactExact(makeCommand(command, 0), 2))
     }
 
     private fun executeSelectSource() {
@@ -222,7 +218,6 @@ class ScannerProtocol(
 
     private fun executeScanParams(
         dpi: Int,
-        width: Int,
         height: Int,
         rawWidth: Int,
         channels: Int
