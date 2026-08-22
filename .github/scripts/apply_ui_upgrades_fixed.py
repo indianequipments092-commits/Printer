@@ -1,8 +1,8 @@
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-MAIN = ROOT / "ScannerApp/app/src/main/java/indianequipments/usbscanner/MainActivity.kt"
-LIB = ROOT / "ScannerApp/app/src/main/java/indianequipments/usbscanner/ScanLibrary.kt"
+MAIN = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt"
+LIB = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/ScanLibrary.kt"
 
 
 def sub(path, old, new):
@@ -37,7 +37,6 @@ new = '''                val result = scanner.scan(ScannerProtocol.ScanConfig(dp
                 var finalBitmap = result.bitmap
                 if (selectedBrightness != 0f || selectedContrast != 1f) {
                     val adjusted = library.applyAdjustments(finalBitmap, selectedBrightness, selectedContrast)
-                    if (finalBitmap !== result.bitmap && !finalBitmap.isRecycled) finalBitmap.recycle()
                     finalBitmap = adjusted
                 }
                 if (selectedGrayscale) {
