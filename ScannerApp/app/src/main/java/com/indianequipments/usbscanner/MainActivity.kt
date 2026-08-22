@@ -9,15 +9,7 @@ import android.hardware.usb.UsbDevice
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
-import android.widget.ArrayAdapter
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.ImageView
-import android.widget.LinearLayout
-import android.widget.ProgressBar
-import android.widget.ScrollView
-import android.widget.Spinner
-import android.widget.TextView
+import android.widget.*
 import java.util.concurrent.Executors
 
 class MainActivity : Activity() {
@@ -25,29 +17,32 @@ class MainActivity : Activity() {
     private lateinit var status: TextView
     private lateinit var deviceText: TextView
     private lateinit var scanButton: Button
-    private lateinit var savePdfButton: Button
+    private lateinit var pdfButton: Button
+    private lateinit var jpgButton: Button
+    private lateinit var rotateButton: Button
+    private lateinit var grayButton: Button
+    private lateinit var deleteButton: Button
+    private lateinit var newButton: Button
+    private lateinit var pagesText: TextView
     private lateinit var progress: ProgressBar
     private lateinit var progressText: TextView
     private lateinit var preview: ImageView
-    private lateinit var dpiSpinner: Spinner
-    private lateinit var colorCheck: CheckBox
-
-    private var connectedDevice: UsbDevice? = null
+    private lateinit var dpi: Spinner
+    private lateinit var color: CheckBox
+    private var device: UsbDevice? = null
     private var protocol: ScannerProtocol? = null
     private val pages = mutableListOf<Bitmap>()
-    private val pageDpis = mutableListOf<Int>()
+    private val dpis = mutableListOf<Int>()
     private lateinit var document: ScanDocument
     private val executor = Executors.newSingleThreadExecutor()
     private var scanning = false
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun onCreate(state: Bundle?) {
+        super.onCreate(state)
         document = ScanDocument(this)
         usb = UsbScannerManager(this)
-        usb.onPermissionGranted = { device -> connectDevice(device) }
-        usb.onPermissionDenied = {
-            runOnUiThread { status.text = "USB permission denied. Tap Connect scanner and allow access." }
-        }
+        usb.onPermissionGranted = { connectDevice(it) }
+        usb.onPermissionDenied = { runOnUiThread { status.text = "USB permission denied. Tap Connect again." } }
         setContentView(buildUi())
         usb.register()
         refreshDevices()
@@ -56,284 +51,189 @@ class MainActivity : Activity() {
     private fun buildUi(): ScrollView {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), dp(22), dp(20), dp(28))
-            setBackgroundColor(Color.WHITE)
+            setPadding(dp(18), dp(20), dp(18), dp(28))
+            setBackgroundColor(Color.rgb(246, 248, 252))
         }
-
         val title = TextView(this).apply {
-            text = "USB Scanner"
-            textSize = 30f
+            text = "USB SCANNER"
+            textSize = 29f
             typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.rgb(25, 35, 50))
-            gravity = Gravity.CENTER_HORIZONTAL
+            setTextColor(Color.rgb(18, 30, 46))
+            gravity = Gravity.CENTER
         }
-        val subtitle = TextView(this).apply {
-            text = "Canon MF3010 • USB scanning"
+        val sub = TextView(this).apply {
+            text = "Canon MF3010  •  Professional scan workspace"
             textSize = 14f
-            setTextColor(Color.rgb(100, 110, 125))
-            gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(0, dp(4), 0, dp(18))
+            setTextColor(Color.rgb(90, 104, 122))
+            gravity = Gravity.CENTER
+            setPadding(0, dp(4), 0, dp(16))
         }
+        root.addView(title)
+        root.addView(sub)
+        status = card("Waiting for scanner…", 15f)
+        deviceText = card("Checking USB devices…", 13f)
+        root.addView(status, lp(0, 8))
+        root.addView(deviceText, lp(0, 10))
 
-        status = cardText("Waiting for scanner…", 15f)
-        deviceText = cardText("Checking USB devices…", 14f)
+        val conn = row()
+        conn.addView(smallButton("Refresh") { refreshDevices() }, weight(1f, 4))
+        conn.addView(smallButton("Connect Scanner") { requestScanner() }, weight(1f, 4))
+        root.addView(conn, lp(0, 16))
 
-        val refresh = actionButton("REFRESH USB DEVICES") { refreshDevices() }
-        val connect = actionButton("CONNECT SCANNER") { requestFirstScanner() }
-        scanButton = actionButton("SCAN PAGE") { runScan() }
-        savePdfButton = actionButton("SAVE SCANNED PAGES AS PDF") { savePdf() }
-        scanButton.isEnabled = false
-        savePdfButton.isEnabled = false
-
-        dpiSpinner = Spinner(this).apply {
-            adapter = ArrayAdapter(
-                this@MainActivity,
-                android.R.layout.simple_spinner_item,
-                listOf("75 DPI", "150 DPI", "300 DPI", "600 DPI")
-            ).also { it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+        root.addView(section("SCAN SETTINGS"))
+        val settings = row().apply {
+            setPadding(dp(10), dp(4), dp(10), dp(4))
+            background = bg(Color.WHITE, 16)
+        }
+        dpi = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_item,
+                listOf("75 DPI", "150 DPI", "300 DPI", "600 DPI")).also {
+                it.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            }
             setSelection(2)
         }
-        colorCheck = CheckBox(this).apply {
-            text = "Color scan"
-            textSize = 15f
-            isChecked = true
-        }
+        color = CheckBox(this).apply { text = "Color"; textSize = 14f; isChecked = true }
+        settings.addView(TextView(this).apply { text = "Resolution"; textSize = 13f }, weight(1f, 3))
+        settings.addView(dpi, weight(1.3f, 3))
+        settings.addView(color, weight(1f, 3))
+        root.addView(settings, lp(0, 12))
 
-        val settingsTitle = sectionTitle("SCAN SETTINGS")
-        val settingsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-        settingsRow.addView(dpiSpinner, LinearLayout.LayoutParams(0, dp(52), 1f).apply {
-            setMargins(0, 0, dp(8), 0)
-        })
-        settingsRow.addView(colorCheck, LinearLayout.LayoutParams(0, dp(52), 1f))
+        scanButton = mainButton("SCAN DOCUMENT") { scan() }
+        scanButton.isEnabled = false
+        root.addView(scanButton, lp(0, 10))
+        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = View.GONE }
+        progressText = TextView(this).apply { textSize = 13f; setTextColor(Color.DKGRAY); visibility = View.GONE }
+        root.addView(progress)
+        root.addView(progressText, lp(0, 12))
 
-        progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply {
-            max = 100
-            progress = 0
-            visibility = View.GONE
-        }
-        progressText = TextView(this).apply {
-            textSize = 13f
-            setTextColor(Color.rgb(80, 90, 105))
-            visibility = View.GONE
-            setPadding(0, dp(6), 0, dp(8))
-        }
-
-        val previewTitle = sectionTitle("LAST SCANNED PAGE")
+        val header = row()
+        header.addView(section("CURRENT DOCUMENT"), weight(1f, 0))
+        pagesText = TextView(this).apply { text = "0 pages"; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(21,101,192)) }
+        header.addView(pagesText)
+        root.addView(header, lp(0, 6))
         preview = ImageView(this).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
             visibility = View.GONE
-            setBackgroundColor(Color.rgb(245, 247, 250))
-            setPadding(dp(6), dp(6), dp(6), dp(6))
+            setBackgroundColor(Color.WHITE)
+            setPadding(dp(7), dp(7), dp(7), dp(7))
         }
+        root.addView(preview, lp(0, 10))
 
-        root.addView(title)
-        root.addView(subtitle)
-        root.addView(status, marginParams(bottom = 10))
-        root.addView(deviceText, marginParams(bottom = 14))
-        root.addView(refresh, marginParams(bottom = 8))
-        root.addView(connect, marginParams(bottom = 16))
-        root.addView(settingsTitle)
-        root.addView(settingsRow, marginParams(bottom = 10))
-        root.addView(progress, marginParams(bottom = 0))
-        root.addView(progressText)
-        root.addView(scanButton, marginParams(bottom = 8))
-        root.addView(savePdfButton, marginParams(bottom = 18))
-        root.addView(previewTitle)
-        root.addView(preview, marginParams())
+        val edit = row()
+        rotateButton = smallButton("Rotate") { rotatePage() }
+        grayButton = smallButton("Grayscale") { grayPage() }
+        deleteButton = smallButton("Delete") { deletePage() }
+        rotateButton.isEnabled = false; grayButton.isEnabled = false; deleteButton.isEnabled = false
+        edit.addView(rotateButton, weight(1f, 3)); edit.addView(grayButton, weight(1f, 3)); edit.addView(deleteButton, weight(1f, 3))
+        root.addView(edit, lp(0, 10))
 
-        return ScrollView(this).apply {
-            isFillViewport = true
-            addView(root)
-        }
+        pdfButton = mainButton("SAVE ALL PAGES AS PDF") { savePdf() }
+        jpgButton = smallButton("SAVE CURRENT PAGE AS JPG") { saveJpg() }
+        newButton = smallButton("START NEW DOCUMENT") { newDocument() }
+        pdfButton.isEnabled = false; jpgButton.isEnabled = false; newButton.isEnabled = false
+        root.addView(pdfButton, lp(0, 8)); root.addView(jpgButton, lp(0, 8)); root.addView(newButton)
+        return ScrollView(this).apply { isFillViewport = true; addView(root) }
     }
 
     private fun refreshDevices() {
-        val all = usb.allDevices()
-        val scanners = usb.scannerDevices()
-        deviceText.text = if (all.isEmpty()) {
-            "No USB device detected. Connect the MF3010 with a USB-OTG adapter."
-        } else {
-            all.joinToString("\n") { d ->
-                val scanner = if (scanners.any { it.deviceId == d.deviceId }) "  •  SUPPORTED SCANNER" else ""
-                "${d.productName ?: "USB device"}\nVID ${d.vendorId} / PID ${d.productId}$scanner"
-            }
+        val all = usb.allDevices(); val scanners = usb.scannerDevices()
+        deviceText.text = if (all.isEmpty()) "No USB device detected. Connect MF3010 using USB-OTG." else all.joinToString("\n") { d ->
+            val mark = if (scanners.any { it.deviceId == d.deviceId }) "  •  SUPPORTED SCANNER" else ""
+            "${d.productName ?: "USB device"}\nVID ${d.vendorId} / PID ${d.productId}$mark"
         }
-        status.text = if (scanners.isEmpty()) {
-            "No supported scanner detected."
-        } else {
-            "${scanners.size} supported scanner device(s) detected."
-        }
-        if (connectedDevice == null) scanButton.isEnabled = false
+        status.text = if (scanners.isEmpty()) "No supported scanner detected." else "${scanners.size} supported scanner device(s) detected."
+        if (device == null) scanButton.isEnabled = false
     }
 
-    private fun requestFirstScanner() {
-        val device = usb.scannerDevices().firstOrNull()
-        if (device == null) {
-            status.text = "No supported scanner detected."
-            return
-        }
-
-        if (usb.hasPermission(device)) {
-            status.text = "USB access already granted. Connecting…"
-            connectDevice(device)
-            return
-        }
-
-        status.text = "Requesting USB access…"
-        usb.requestPermission(device)
+    private fun requestScanner() {
+        val d = usb.scannerDevices().firstOrNull() ?: run { status.text = "No supported scanner detected."; return }
+        if (usb.hasPermission(d)) connectDevice(d) else { status.text = "Requesting USB access…"; usb.requestPermission(d) }
     }
 
-    private fun connectDevice(device: UsbDevice) {
-        if (!usb.open(device)) {
-            connectedDevice = null
-            protocol = null
-            scanButton.isEnabled = false
-            status.text = "MF3010 detected, but its scanner USB interface could not be opened."
-            return
-        }
-
-        connectedDevice = device
+    private fun connectDevice(d: UsbDevice) {
+        if (!usb.open(d)) { device = null; protocol = null; scanButton.isEnabled = false; status.text = "MF3010 USB interface could not be opened."; return }
+        device = d
         protocol = ScannerProtocol(usb.connection()!!, usb.usbInterface()!!)
-        val cap = protocol!!.probe()
-        if (!cap.supported) {
-            status.text = "Scanner connected, but its bulk scan transport is unavailable."
-            scanButton.isEnabled = false
-            return
-        }
-
-        status.text = "Connected: ${device.productName ?: "MF3010"}\nReady to scan."
-        deviceText.text = "MF3010  •  VID ${device.vendorId} / PID ${device.productId}\nCanon USB scanner interface ready"
+        if (!protocol!!.probe().supported) { status.text = "Scanner transport unavailable."; scanButton.isEnabled = false; return }
+        status.text = "Connected: ${d.productName ?: "MF3010"}\nReady to scan."
+        deviceText.text = "MF3010  •  VID ${d.vendorId} / PID ${d.productId}\nCanon USB scanner interface ready"
         scanButton.isEnabled = true
-        savePdfButton.isEnabled = pages.isNotEmpty()
     }
 
-    private fun runScan() {
-        val scanner = protocol
-        if (scanner == null || connectedDevice == null) {
-            status.text = "Connect the scanner first."
-            return
-        }
+    private fun scan() {
+        val scanner = protocol ?: run { status.text = "Connect the scanner first."; return }
         if (scanning) return
-
-        val dpi = dpiSpinner.selectedItem.toString().substringBefore(" ").toInt()
-        val color = colorCheck.isChecked
-        scanning = true
-        scanButton.isEnabled = false
-        savePdfButton.isEnabled = false
-        progress.progress = 0
-        progress.visibility = View.VISIBLE
-        progressText.visibility = View.VISIBLE
-        progressText.text = "Starting scan…"
-
+        val selectedDpi = dpi.selectedItem.toString().substringBefore(" ").toInt()
+        scanning = true; scanButton.isEnabled = false; pdfButton.isEnabled = false
+        progress.progress = 0; progress.visibility = View.VISIBLE; progressText.visibility = View.VISIBLE; progressText.text = "Starting scan…"
         executor.execute {
             try {
-                val result = scanner.scan(
-                    ScannerProtocol.ScanConfig(dpi = dpi, color = color)
-                ) { percent, message ->
-                    runOnUiThread {
-                        progress.progress = percent
-                        progressText.text = message
-                    }
+                val result = scanner.scan(ScannerProtocol.ScanConfig(dpi = selectedDpi, color = color.isChecked)) { p, msg ->
+                    runOnUiThread { progress.progress = p; progressText.text = msg }
                 }
-
                 runOnUiThread {
-                    pages.add(result.bitmap)
-                    pageDpis.add(result.dpi)
-                    preview.setImageBitmap(result.bitmap)
-                    preview.visibility = View.VISIBLE
-                    status.text = "Scan complete • ${result.width} × ${result.height} px • ${result.dpi} DPI"
-                    savePdfButton.isEnabled = true
-                    progress.visibility = View.GONE
-                    progressText.visibility = View.GONE
-                    scanButton.isEnabled = connectedDevice != null
-                    scanning = false
+                    pages.add(result.bitmap); dpis.add(result.dpi); showPage()
+                    status.text = "Scan complete  •  ${result.width} × ${result.height} px  •  ${result.dpi} DPI"
+                    finishScanUi()
                 }
             } catch (t: Throwable) {
-                runOnUiThread {
-                    status.text = "Scan failed: ${t.message ?: "Unknown scanner error"}"
-                    progress.visibility = View.GONE
-                    progressText.visibility = View.GONE
-                    scanButton.isEnabled = connectedDevice != null
-                    savePdfButton.isEnabled = pages.isNotEmpty()
-                    scanning = false
-                }
+                runOnUiThread { status.text = "Scan failed: ${t.message ?: "Unknown scanner error"}"; finishScanUi() }
             }
         }
+    }
+
+    private fun finishScanUi() { progress.visibility = View.GONE; progressText.visibility = View.GONE; scanning = false; scanButton.isEnabled = device != null; pdfButton.isEnabled = pages.isNotEmpty() }
+
+    private fun showPage() {
+        if (pages.isEmpty()) return
+        preview.setImageBitmap(pages.last()); preview.visibility = View.VISIBLE
+        pagesText.text = "${pages.size} page${if (pages.size == 1) "" else "s"}"
+        rotateButton.isEnabled = true; grayButton.isEnabled = true; deleteButton.isEnabled = true; pdfButton.isEnabled = true; jpgButton.isEnabled = true; newButton.isEnabled = true
+    }
+
+    private fun rotatePage() {
+        if (pages.isEmpty()) return
+        val old = pages.removeAt(pages.lastIndex); pages.add(document.rotate(old, 90f)); old.recycle(); preview.setImageBitmap(pages.last()); status.text = "Page rotated 90°."
+    }
+
+    private fun grayPage() {
+        if (pages.isEmpty()) return
+        val old = pages.removeAt(pages.lastIndex); pages.add(document.grayscale(old)); old.recycle(); preview.setImageBitmap(pages.last()); status.text = "Page converted to grayscale."
+    }
+
+    private fun deletePage() {
+        if (pages.isEmpty()) return
+        pages.removeAt(pages.lastIndex).also { if (!it.isRecycled) it.recycle() }; dpis.removeAt(dpis.lastIndex)
+        if (pages.isEmpty()) newDocument() else { showPage(); status.text = "Page deleted." }
+    }
+
+    private fun newDocument() {
+        pages.forEach { if (!it.isRecycled) it.recycle() }; pages.clear(); dpis.clear(); preview.visibility = View.GONE; pagesText.text = "0 pages"
+        rotateButton.isEnabled = false; grayButton.isEnabled = false; deleteButton.isEnabled = false; pdfButton.isEnabled = false; jpgButton.isEnabled = false; newButton.isEnabled = false; status.text = "New document ready."
     }
 
     private fun savePdf() {
-        if (pages.isEmpty()) {
-            status.text = "No scanned pages available."
-            return
-        }
-        savePdfButton.isEnabled = false
-        status.text = "Creating PDF…"
-        executor.execute {
-            try {
-                val file = document.savePdf(pages, pageDpis)
-                runOnUiThread {
-                    status.text = "PDF saved successfully.\n${file.absolutePath}"
-                    savePdfButton.isEnabled = true
-                }
-            } catch (t: Throwable) {
-                runOnUiThread {
-                    status.text = "PDF save failed: ${t.message ?: "Unknown error"}"
-                    savePdfButton.isEnabled = true
-                }
-            }
-        }
+        if (pages.isEmpty()) return
+        status.text = "Creating PDF from ${pages.size} page(s)…"; pdfButton.isEnabled = false
+        executor.execute { try { val f = document.savePdf(pages, dpis); runOnUiThread { status.text = "PDF saved successfully.\n${f.absolutePath}"; pdfButton.isEnabled = true } } catch (t: Throwable) { runOnUiThread { status.text = "PDF save failed: ${t.message ?: "Unknown error"}"; pdfButton.isEnabled = true } } }
     }
 
-    private fun cardText(value: String, size: Float): TextView = TextView(this).apply {
-        text = value
-        textSize = size
-        setTextColor(Color.rgb(55, 65, 80))
-        setPadding(dp(14), dp(12), dp(14), dp(12))
-        background = rounded(Color.rgb(245, 247, 250), 14)
+    private fun saveJpg() {
+        if (pages.isEmpty()) return
+        status.text = "Saving current page…"
+        executor.execute { try { val f = document.savePng(pages.last(), "scan_${System.currentTimeMillis()}.png"); runOnUiThread { status.text = "Image saved successfully.\n${f.absolutePath}" } } catch (t: Throwable) { runOnUiThread { status.text = "Image save failed: ${t.message ?: "Unknown error"}" } } }
     }
 
-    private fun sectionTitle(textValue: String): TextView = TextView(this).apply {
-        text = textValue
-        textSize = 12f
-        typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.rgb(100, 110, 125))
-        setPadding(dp(2), dp(4), 0, dp(6))
-    }
+    private fun row() = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private fun card(text: String, size: Float) = TextView(this).apply { this.text = text; textSize = size; setTextColor(Color.rgb(55,65,80)); setPadding(dp(14),dp(12),dp(14),dp(12)); background = bg(Color.WHITE,16) }
+    private fun section(text: String) = TextView(this).apply { this.text = text; textSize = 12f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.rgb(92,105,122)); setPadding(dp(2),dp(4),0,dp(6)) }
+    private fun mainButton(text: String, action: () -> Unit) = Button(this).apply { this.text = text; textSize = 14f; typeface = Typeface.DEFAULT_BOLD; setTextColor(Color.WHITE); isAllCaps = false; background = bg(Color.rgb(21,101,192),16); setOnClickListener { action() } }
+    private fun smallButton(text: String, action: () -> Unit) = Button(this).apply { this.text = text; textSize = 13f; setTextColor(Color.rgb(30,65,105)); isAllCaps = false; background = bg(Color.WHITE,14); setOnClickListener { action() } }
+    private fun bg(color: Int, radius: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(radius).toFloat() }
+    private fun lp(top: Int, bottom: Int) = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { if (top != 0 || bottom != 0) setMargins(0,dp(top),0,dp(bottom)) }
+    private fun weight(w: Float, margin: Int) = LinearLayout.LayoutParams(0,LinearLayout.LayoutParams.WRAP_CONTENT,w).apply { if (margin != 0) setMargins(dp(margin),0,dp(margin),0) }
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
-    private fun actionButton(label: String, action: () -> Unit): Button = Button(this).apply {
-        text = label
-        textSize = 14f
-        typeface = Typeface.DEFAULT_BOLD
-        setTextColor(Color.WHITE)
-        isAllCaps = false
-        background = rounded(Color.rgb(21, 101, 192), 14)
-        setPadding(dp(8), 0, dp(8), 0)
-        setOnClickListener { action() }
-    }
-
-    private fun rounded(color: Int, radius: Int): GradientDrawable = GradientDrawable().apply {
-        setColor(color)
-        cornerRadius = dp(radius).toFloat()
-    }
-
-    private fun marginParams(bottom: Int = 0): LinearLayout.LayoutParams =
-        LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
-            if (bottom != 0) setMargins(0, 0, 0, dp(bottom))
-        }
-
-    private fun dp(value: Int): Int = (value * resources.displayMetrics.density).roundToInt()
-
-    override fun onDestroy() {
-        executor.shutdownNow()
-        usb.close()
-        usb.unregister()
-        pages.forEach { if (!it.isRecycled) it.recycle() }
-        super.onDestroy()
-    }
+    override fun onDestroy() { executor.shutdownNow(); usb.close(); usb.unregister(); pages.forEach { if (!it.isRecycled) it.recycle() }; super.onDestroy() }
 }
-
-private fun Float.roundToInt(): Int = kotlin.math.round(this).toInt()
