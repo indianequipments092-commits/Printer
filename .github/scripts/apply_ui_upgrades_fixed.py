@@ -9,21 +9,33 @@ def sub(path, old, new):
     s = path.read_text(encoding="utf-8")
     if old in s:
         path.write_text(s.replace(old, new, 1), encoding="utf-8")
-        print("applied:", path.name, old[:50].replace("\n", " "))
+        print("applied:", path.name)
     else:
-        print("skip:", path.name)
+        print("skip:", path.name, old[:50].replace("\n", " "))
 
-# Move all screen content 24dp below the status/camera area.
+# Keep all main-screen content safely below the Android status/camera area.
 sub(MAIN, "setPadding(dp(18), dp(16), dp(18), dp(18))", "setPadding(dp(18), dp(40), dp(18), dp(18))")
 
-# Remove Tools from the visible bottom navigation.
-sub(MAIN, '        navButton("▦", "Library", 2)\n        navButton("⚙", "Tools", 3)\n', '        navButton("▦", "Library", 2)\n')
+# Replace the old Tools tab with the new dedicated Printex tab.
+sub(
+    MAIN,
+    '        navButton("▦", "Library", 2)\n        navButton("⚙", "Tools", 3)\n',
+    '        navButton("▦", "Library", 2)\n        navButton("▣", "Printex", 3)\n'
+)
+sub(MAIN, "            else -> renderTools()\n", "            else -> { /* Printex is a dedicated Activity */ }\n")
+sub(
+    MAIN,
+    "            setOnClickListener { renderTab(tab) }",
+    "            setOnClickListener { if (tab == 3) startActivity(Intent(this, PrintExActivity::class.java)) else renderTab(tab) }"
+)
 
-# Preserve the user's brightness/contrast/grayscale choices for the final scan.
+# Preserve brightness/contrast/grayscale choices in the actual scanned image.
 s = MAIN.read_text(encoding="utf-8")
 s = s.replace(
     '        val selectedDpi = (dpiSpinner?.selectedItem?.toString()?.substringBefore(" ")?.toIntOrNull() ?: 300)\n        scanning = true',
-    '        val selectedDpi = (dpiSpinner?.selectedItem?.toString()?.substringBefore(" ")?.toIntOrNull() ?: 300)\n        val selectedBrightness = brightness\n        val selectedContrast = contrast\n        val selectedGrayscale = grayscale\n        scanning = true', 1)
+    '        val selectedDpi = (dpiSpinner?.selectedItem?.toString()?.substringBefore(" ")?.toIntOrNull() ?: 300)\n        val selectedBrightness = brightness\n        val selectedContrast = contrast\n        val selectedGrayscale = grayscale\n        scanning = true',
+    1,
+)
 old = '''                val result = scanner.scan(ScannerProtocol.ScanConfig(dpi = selectedDpi, color = colorSwitch?.isChecked ?: true)) { p, msg ->
                     runOnUiThread { progress?.progress = p; progressText?.text = msg }
                 }
@@ -36,8 +48,7 @@ new = '''                val result = scanner.scan(ScannerProtocol.ScanConfig(dp
                 }
                 var finalBitmap = result.bitmap
                 if (selectedBrightness != 0f || selectedContrast != 1f) {
-                    val adjusted = library.applyAdjustments(finalBitmap, selectedBrightness, selectedContrast)
-                    finalBitmap = adjusted
+                    finalBitmap = library.applyAdjustments(finalBitmap, selectedBrightness, selectedContrast)
                 }
                 if (selectedGrayscale) {
                     val gray = document.grayscale(finalBitmap)
@@ -55,6 +66,6 @@ else:
     print("skip: final scan image processing")
 MAIN.write_text(s, encoding="utf-8")
 
-# Make 1.0 the neutral contrast value instead of accidentally turning it into 2.0.
+# 1.0 is the neutral contrast value.
 sub(LIB, "val c = (contrast + 1f).coerceAtLeast(0.05f)", "val c = contrast.coerceAtLeast(0.05f)")
-print("USB Scanner fixes ready")
+print("USB Scanner + Printex fixes ready")
