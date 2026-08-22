@@ -70,6 +70,14 @@ class MainActivity : Activity() {
             status.text = "No supported scanner detected."
             return
         }
+
+        if (usb.hasPermission(device)) {
+            status.text = "USB permission already granted. Connecting…"
+            connectDevice(device)
+            return
+        }
+
+        status.text = "Requesting USB permission…"
         usb.requestPermission(device)
     }
 
