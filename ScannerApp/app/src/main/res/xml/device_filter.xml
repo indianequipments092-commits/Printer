@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Intentionally broad: the app discovers USB devices and identifies scanner-class devices at runtime. -->
+    <usb-device class="6" />
+</resources>
