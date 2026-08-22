@@ -6,6 +6,7 @@ on:
       - 'ScannerApp/**'
       - '.github/workflows/build-scanner.yml'
       - '.github/scripts/**'
+      - '.github/assets/**'
   workflow_dispatch:
 
 jobs:
@@ -25,8 +26,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Apply UI and image-edit fixes
-        run: python3 ../.github/scripts/apply_ui_upgrades_fixed.py
+      - name: Apply Maha Advanced USB Scanner + Printex UI
+        run: python3 ../.github/scripts/upgrade_ui.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Verify APK output
@@ -36,5 +37,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: usb-scanner-debug-apk
+          name: usb-scanner-printex-debug-apk
           path: ScannerApp/app/build/outputs/apk/debug/app-debug.apk
