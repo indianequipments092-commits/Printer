@@ -114,11 +114,13 @@ class MainActivity : Activity() {
         navButton("◎", "Studio", 1)
         navButton("▦", "Library", 2)
         navButton("⚙", "Tools", 3)
+        navButton("▤", "PDF Reader", 4)
         when (tab) {
             0 -> renderHome()
             1 -> renderStudio()
             2 -> renderLibrary()
-            else -> renderTools()
+            3 -> renderTools()
+            4 -> renderPdfReaderHome()
         }
     }
 
@@ -339,6 +341,54 @@ class MainActivity : Activity() {
         if (list.isEmpty()) content.addView(emptyCard("Library is empty", "Scan a page and it will be saved here automatically."))
         list.forEach { file -> content.addView(fileRow(file, true), margin(0,8)) }
         if (selectedLibrary.isNotEmpty()) content.addView(actionButton("EXPORT ${selectedLibrary.size} SELECTED") { showLibraryShareFormatDialog() }, margin(0,12))
+    }
+
+    private fun renderPdfReaderHome() {
+        content.addView(title("PDF READER", "ADVANCED LOCAL PDF VIEWER • WHATSAPP READY"))
+        val hero = card()
+        hero.addView(TextView(this).apply {
+            text = "READ PDF DOCUMENTS"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(130,160,200))
+        })
+        hero.addView(TextView(this).apply {
+            text = "Open any PDF from your phone, WhatsApp, Files or another app."
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setPadding(0,dp(8),0,dp(4))
+        })
+        hero.addView(TextView(this).apply {
+            text = "Multi-page reading • Page jump • Zoom • Rotate • Share"
+            textSize = 12f
+            setTextColor(Color.rgb(150,165,185))
+        })
+        hero.addView(actionButton("OPEN PDF") {
+            startActivity(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/pdf"
+            })
+        }, LinearLayout.LayoutParams(-1, dp(54)).apply { setMargins(0,dp(18),0,0) })
+        content.addView(hero, margin(0,12))
+        val info = card()
+        info.addView(section("ADVANCED READER"))
+        listOf(
+            "✓ Open PDFs received from WhatsApp and other apps",
+            "✓ Previous / next page and direct page jump",
+            "✓ Zoom in / zoom out and fit-to-screen",
+            "✓ Rotate pages while reading",
+            "✓ Share the original PDF without re-scanning",
+            "✓ Works locally without automatic upload"
+        ).forEach { line -> info.addView(TextView(this).apply {
+            text = line; textSize = 13f; setTextColor(Color.rgb(185,198,215)); setPadding(0,dp(7),0,dp(7))
+        }) }
+        content.addView(info, margin(0,10))
+        content.addView(actionButton("OPEN FROM WHATSAPP / FILES") {
+            startActivity(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE); type = "application/pdf"
+            })
+        }, margin(0,10))
     }
 
     private fun renderTools() {
