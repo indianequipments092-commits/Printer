@@ -1,0 +1,2 @@
+PDF Reader patch trigger file.
+Used to keep the PDF Reader workflow pathspec valid and trigger the scanner build workflow after PDF Reader changes.
