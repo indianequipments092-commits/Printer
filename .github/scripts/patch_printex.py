@@ -32,6 +32,18 @@ if 'override fun onResume()' not in s:
 
 s = s.replace('            pm.print("Printex • ${fileName.text}",object:PrintDocumentAdapter(){', '            recordPrintHistory(file.name)\n            pm.print("Printex • ${fileName.text}",object:PrintDocumentAdapter(){', 1)
 
+# Make Auto Rotate real in the generated print document. The page is rotated only
+# when the selected orientation requires it; no stretching is introduced.
+old_bitmap_add = 'bitmaps.add(transformBitmap(b))'
+new_bitmap_add = 'bitmaps.add(if(autoRotate) autoRotateBitmap(transformBitmap(b)) else transformBitmap(b))'
+s = s.replace(old_bitmap_add, new_bitmap_add)
+
+if 'private fun autoRotateBitmap(' not in s:
+    anchor_rotate = '    private fun drawScaled(c:Canvas,b:Bitmap,x:Float,y:Float,w:Float,h:Float)'
+    rotate_fn = '''    private fun autoRotateBitmap(src:Bitmap):Bitmap {\n        val targetLandscape = orientation == "Landscape"\n        val sourceLandscape = src.width > src.height\n        if (orientation == "Portrait" && !sourceLandscape) return src\n        if (orientation == "Landscape" && sourceLandscape) return src\n        if (orientation == "Auto") return src\n        val matrix = Matrix().apply { postRotate(if (targetLandscape) 90f else 90f) }\n        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)\n        if (rotated !== src && !src.isRecycled) src.recycle()\n        return rotated\n    }\n\n'''
+    if anchor_rotate in s:
+        s = s.replace(anchor_rotate, rotate_fn + anchor_rotate, 1)
+
 anchor = '    private fun handleIntent(i: Intent?) {'
 if 'private fun buildBottomNav()' not in s:
     block = r'''    private fun buildBottomNav(): View {
@@ -42,7 +54,6 @@ if 'private fun buildBottomNav()' not in s:
         nav.addView(navButton("▣", "Printex") { }, navWeight())
         return nav
     }
-
     private fun navButton(icon:String,label:String,click:()->Unit)=LinearLayout(this).apply {
         orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setOnClickListener{click()}
         addView(TextView(this@PrintExActivity).apply{text=icon;textSize=20f;gravity=Gravity.CENTER;setTextColor(if(label=="Printex") BLUE else MUTED)})
@@ -50,12 +61,9 @@ if 'private fun buildBottomNav()' not in s:
     }
     private fun navWeight()=LinearLayout.LayoutParams(0,-1,1f)
     private fun openScannerTab(tab:Int){ startActivity(Intent(this,MainActivity::class.java).putExtra("open_tab",tab)); finish() }
-
     private fun connectedUsbPrinter(): android.hardware.usb.UsbDevice? {
         val manager = getSystemService(Context.USB_SERVICE) as? UsbManager ?: return null
-        return manager.deviceList.values.firstOrNull { device ->
-            device.deviceClass == 7 || (0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == 7 }
-        }
+        return manager.deviceList.values.firstOrNull { device -> device.deviceClass == 7 || (0 until device.interfaceCount).any { device.getInterface(it).interfaceClass == 7 } }
     }
     private fun printerDisplayName(): String {
         val d = connectedUsbPrinter() ?: return "Printer is not connected"
@@ -65,48 +73,22 @@ if 'private fun buildBottomNav()' not in s:
     private fun refreshPrinterStatus() {
         if (!::printerStatusView.isInitialized) return
         val d = connectedUsbPrinter()
-        if (d == null) {
-            printerStatusView.text = "Printer is not connected"
-            printerStatusView.setTextColor(Color.rgb(255,170,90))
-        } else {
-            val name = d.productName?.takeIf { it.isNotBlank() } ?: d.manufacturerName?.takeIf { it.isNotBlank() } ?: d.deviceName
-            printerStatusView.text = "●  $name Connected"
-            printerStatusView.setTextColor(Color.rgb(75,220,145))
-        }
+        if (d == null) { printerStatusView.text = "Printer is not connected"; printerStatusView.setTextColor(Color.rgb(255,170,90)) }
+        else { val name = d.productName?.takeIf { it.isNotBlank() } ?: d.manufacturerName?.takeIf { it.isNotBlank() } ?: d.deviceName; printerStatusView.text = "●  $name Connected"; printerStatusView.setTextColor(Color.rgb(75,220,145)) }
     }
     private fun showMoreMenu() {
         val items = arrayOf("Printer Management", "Print Queue", "Print History", "Default Print Settings", "Printer Diagnostics", "App Settings")
-        AlertDialog.Builder(this).setTitle("Printex Menu").setItems(items) { _, which ->
-            when (which) {
-                0 -> printerChooser()
-                1 -> printerChooser()
-                2 -> showPrintHistory()
-                3 -> showDefaultPrintSettings()
-                4 -> showPrinterDiagnostics()
-                5 -> showAppSettings()
-            }
-        }.show()
+        AlertDialog.Builder(this).setTitle("Printex Menu").setItems(items) { _, which -> when (which) { 0 -> printerChooser(); 1 -> printerChooser(); 2 -> showPrintHistory(); 3 -> showDefaultPrintSettings(); 4 -> showPrinterDiagnostics(); 5 -> showAppSettings() } }.show()
     }
     private fun recordPrintHistory(fileName: String) {
         val current = prefs.getStringSet("history", emptySet())?.toMutableSet() ?: mutableSetOf()
         current.add("${System.currentTimeMillis()} • $fileName • $copies copies • $paperSize • $orientation • $colorMode • $scale")
         prefs.edit().putStringSet("history", current.takeLast(20).toSet()).apply()
     }
-    private fun showPrintHistory() {
-        val history = prefs.getStringSet("history", emptySet())?.toList()?.sortedDescending() ?: emptyList()
-        AlertDialog.Builder(this).setTitle("Print History").setMessage(if (history.isEmpty()) "No print jobs recorded yet." else history.joinToString("\n\n")).setPositiveButton("OK", null).show()
-    }
-    private fun showDefaultPrintSettings() {
-        AlertDialog.Builder(this).setTitle("Default Print Settings").setMessage("Paper: $paperSize\nOrientation: $orientation\nColor: $colorMode\nCopies: $copies\nScale: $scale\nDuplex: $duplex").setPositiveButton("OK", null).show()
-    }
-    private fun showPrinterDiagnostics() {
-        val d = connectedUsbPrinter()
-        val message = if (d == null) "Printer is not connected.\nConnect the USB printer and try again." else "Printer detected.\nName: ${d.productName ?: d.deviceName}\nUSB VID: ${d.vendorId}\nUSB PID: ${d.productId}\nInterfaces: ${d.interfaceCount}"
-        AlertDialog.Builder(this).setTitle("Printer Diagnostics").setMessage(message).setPositiveButton("OK", null).show()
-    }
-    private fun showAppSettings() {
-        AlertDialog.Builder(this).setTitle("Printex App Settings").setMessage("Preview opens at fit-to-page. Pinch to zoom, drag to inspect, and use page controls to move between pages. Print settings are applied to the generated print document.").setPositiveButton("OK", null).show()
-    }
+    private fun showPrintHistory() { val history = prefs.getStringSet("history", emptySet())?.toList()?.sortedDescending() ?: emptyList(); AlertDialog.Builder(this).setTitle("Print History").setMessage(if (history.isEmpty()) "No print jobs recorded yet." else history.joinToString("\n\n")).setPositiveButton("OK", null).show() }
+    private fun showDefaultPrintSettings() { AlertDialog.Builder(this).setTitle("Default Print Settings").setMessage("Paper: $paperSize\nOrientation: $orientation\nColor: $colorMode\nCopies: $copies\nScale: $scale\nDuplex: $duplex").setPositiveButton("OK", null).show() }
+    private fun showPrinterDiagnostics() { val d = connectedUsbPrinter(); val message = if (d == null) "Printer is not connected.\nConnect the USB printer and try again." else "Printer detected.\nName: ${d.productName ?: d.deviceName}\nUSB VID: ${d.vendorId}\nUSB PID: ${d.productId}\nInterfaces: ${d.interfaceCount}"; AlertDialog.Builder(this).setTitle("Printer Diagnostics").setMessage(message).setPositiveButton("OK", null).show() }
+    private fun showAppSettings() { AlertDialog.Builder(this).setTitle("Printex App Settings").setMessage("Preview opens at fit-to-page. Pinch to zoom, drag to inspect, and use page controls to move between pages. Print settings are applied to the generated print document.").setPositiveButton("OK", null).show() }
 
 '''
     if anchor in s:
@@ -115,46 +97,15 @@ if 'private fun buildBottomNav()' not in s:
 start = s.find('class ZoomImageView(')
 if start != -1:
     s = s[:start] + r'''class ZoomImageView(context:android.content.Context):android.widget.ImageView(context){
-    private val matrix=Matrix()
-    private var fitScale=1f
-    private var currentScale=1f
-    private var lastX=0f
-    private var lastY=0f
-    private var dragging=false
-    private val detector=ScaleGestureDetector(context,object:ScaleGestureDetector.SimpleOnScaleGestureListener(){
-        override fun onScale(d:ScaleGestureDetector):Boolean{
-            val next=(currentScale*d.scaleFactor).coerceIn(fitScale,fitScale*10f)
-            val applied=next/currentScale
-            currentScale=next
-            matrix.postScale(applied,applied,d.focusX,d.focusY)
-            imageMatrix=matrix
-            return true
-        }
-    })
+    private val matrix=Matrix(); private var fitScale=1f; private var currentScale=1f; private var lastX=0f; private var lastY=0f; private var dragging=false
+    private val detector=ScaleGestureDetector(context,object:ScaleGestureDetector.SimpleOnScaleGestureListener(){ override fun onScale(d:ScaleGestureDetector):Boolean{ val next=(currentScale*d.scaleFactor).coerceIn(fitScale,fitScale*10f); val applied=next/currentScale; currentScale=next; matrix.postScale(applied,applied,d.focusX,d.focusY); imageMatrix=matrix; return true } })
     init{scaleType=ScaleType.MATRIX;setBackgroundColor(Color.rgb(18,24,34));isClickable=true}
     override fun setImageBitmap(bm:Bitmap?){super.setImageBitmap(bm);post{resetZoom()}}
     override fun onSizeChanged(w:Int,h:Int,oldw:Int,oldh:Int){super.onSizeChanged(w,h,oldw,oldh);post{if(drawable!=null)resetZoom()}}
-    override fun onTouchEvent(event:MotionEvent):Boolean{
-        detector.onTouchEvent(event)
-        when(event.actionMasked){
-            MotionEvent.ACTION_DOWN->{lastX=event.x;lastY=event.y;dragging=true;return true}
-            MotionEvent.ACTION_MOVE->{if(dragging&&!detector.isInProgress){matrix.postTranslate(event.x-lastX,event.y-lastY);imageMatrix=matrix;lastX=event.x;lastY=event.y};return true}
-            MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{dragging=false;return true}
-        }
-        return true
-    }
-    fun resetZoom(){
-        val d=drawable?:return
-        val vw=(width-paddingLeft-paddingRight).coerceAtLeast(1).toFloat()
-        val vh=(height-paddingTop-paddingBottom).coerceAtLeast(1).toFloat()
-        fitScale=minOf(vw/d.intrinsicWidth.toFloat(),vh/d.intrinsicHeight.toFloat()).coerceAtLeast(0.01f)
-        currentScale=fitScale
-        val dx=(vw-d.intrinsicWidth*fitScale)/2f+paddingLeft
-        val dy=(vh-d.intrinsicHeight*fitScale)/2f+paddingTop
-        matrix.reset();matrix.setScale(fitScale,fitScale);matrix.postTranslate(dx,dy);imageMatrix=matrix
-    }
+    override fun onTouchEvent(event:MotionEvent):Boolean{ detector.onTouchEvent(event); when(event.actionMasked){ MotionEvent.ACTION_DOWN->{lastX=event.x;lastY=event.y;dragging=true;return true}; MotionEvent.ACTION_MOVE->{if(dragging&&!detector.isInProgress){matrix.postTranslate(event.x-lastX,event.y-lastY);imageMatrix=matrix;lastX=event.x;lastY=event.y};return true}; MotionEvent.ACTION_UP,MotionEvent.ACTION_CANCEL->{dragging=false;return true} }; return true }
+    fun resetZoom(){ val d=drawable?:return; val vw=(width-paddingLeft-paddingRight).coerceAtLeast(1).toFloat(); val vh=(height-paddingTop-paddingBottom).coerceAtLeast(1).toFloat(); fitScale=minOf(vw/d.intrinsicWidth.toFloat(),vh/d.intrinsicHeight.toFloat()).coerceAtLeast(0.01f); currentScale=fitScale; val dx=(vw-d.intrinsicWidth*fitScale)/2f+paddingLeft; val dy=(vh-d.intrinsicHeight*fitScale)/2f+paddingTop; matrix.reset();matrix.setScale(fitScale,fitScale);matrix.postTranslate(dx,dy);imageMatrix=matrix }
 }
 '''
 
 PRINT.write_text(s, encoding='utf-8')
-print('Applied Printex safe-area, live printer status, advanced menu, bottom navigation, print history, and fit-to-page viewer')
+print('Applied Printex safe-area, live printer status, advanced menu, bottom navigation, print history, auto-rotate output, and fit-to-page viewer')
