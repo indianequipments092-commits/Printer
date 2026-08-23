@@ -4,7 +4,9 @@ import base64
 ROOT = Path('ScannerApp')
 MAIN = ROOT / 'app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt'
 MANIFEST = ROOT / 'app/src/main/AndroidManifest.xml'
-LOGO_B64 = Path('../.github/assets/app_logo.webp.b64')
+# The workflow runs this script from the repository root, so this path must
+# point into .github/assets (not one directory above the repository).
+LOGO_B64 = Path('.github/assets/app_logo.webp.b64')
 RES = ROOT / 'app/src/main/res/drawable'
 LOGO_OUT = RES / 'app_logo.webp'
 LOGO_XML = RES / 'app_logo.xml'
