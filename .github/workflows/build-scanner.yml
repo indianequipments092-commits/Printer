@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -24,7 +27,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Apply USB Scanner UI
+      - name: Apply USB Scanner UI and Step 4
         run: |
           cd ..
           python3 .github/scripts/upgrade_ui.py
@@ -35,13 +38,17 @@ jobs:
           python3 .github/scripts/step4_printer_workflow.py
           python3 .github/scripts/step4_settings_library.py
           python3 .github/scripts/apply_icons.py
+      - name: Verify generated Step 4 source
+        run: |
+          cd ..
+          python3 .github/scripts/verify_step4.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Verify Step 3 source
         run: |
           cd ..
           python3 .github/scripts/verify_step3.py
-      - name: Verify Step 4 source
+      - name: Verify Step 4 source again
         run: |
           cd ..
           python3 .github/scripts/verify_step4.py
