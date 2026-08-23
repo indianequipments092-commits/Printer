@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.usb.host" android:required="true" />
     <application android:theme="@style/AppTheme" android:label="USB Scanner" android:allowBackup="false" android:supportsRtl="true">
-        <activity android:name=".PrintExActivity" android:exported="true" android:label="Printex">
+        <activity android:name=".PrintExActivity" android:exported="true" android:label="Printex" android:theme="@style/PrintexTheme">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
