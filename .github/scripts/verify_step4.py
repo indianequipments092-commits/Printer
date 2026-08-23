@@ -18,14 +18,17 @@ required = {
     "Saved Settings": 'showSavedSettings()',
     "Brightness": '"Brightness"',
     "Contrast": '"Contrast"',
+    "Contrast centered at zero": 'slider("Contrast", -100, 100, settingPrefs.getInt("current_contrast", 0))',
+    "Actual scan adjustments": 'library.applyAdjustments(raw, brightness, contrast)',
     "Label": '"Label"',
     "Label File": '"Label File"',
     "Sort": '"Sort"',
     "PDF share": 'exportSelectedPdf()',
+    "PNG/JPEG/JPG share": 'exportSelectedImages(',
     "Persistent settings": 'getSharedPreferences("saved_scan_settings"',
     "Persistent labels": 'getSharedPreferences("scan_labels"',
 }
 missing = [name for name, marker in required.items() if marker not in s]
 if missing:
     raise SystemExit("Step 4 verification failed; missing: " + ", ".join(missing))
-print("Step 4 verification passed: printer workflow, settings, sort/share and labels are present")
+print("Step 4 verification passed: printer workflow, real scan adjustments, settings, sort/share and labels are present")
