@@ -24,7 +24,8 @@ selector = r'''    private fun showPrinterSelector() {
             gravity = Gravity.CENTER
         }
         val body = FrameLayout(this)
-        val tabButtons = listOf(
+        lateinit var tabButtons: List<Button>
+        tabButtons = listOf(
             actionButton("WiFi") { showPrinterSource(body, 0, dialog, tabButtons) },
             actionButton("Bluetooth") { showPrinterSource(body, 1, dialog, tabButtons) },
             actionButton("USB") { showPrinterSource(body, 2, dialog, tabButtons) }
