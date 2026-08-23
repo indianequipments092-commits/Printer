@@ -32,6 +32,7 @@ jobs:
           python3 .github/scripts/upgrade_ui.py
           python3 .github/scripts/fix_printex_controls.py
           python3 .github/scripts/repair_printex_build.py
+          python3 .github/scripts/finalize_printex.py
           python3 .github/scripts/apply_icons.py
           python3 .github/scripts/verify_printex.py
       - name: Build debug APK
