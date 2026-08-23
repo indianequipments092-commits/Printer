@@ -32,6 +32,7 @@ jobs:
           python3 .github/scripts/step2_compile_fix.py
           python3 .github/scripts/step3_ui_completion.py
           python3 .github/scripts/step3_functionality.py
+          python3 .github/scripts/step4_printer_workflow.py
           python3 .github/scripts/apply_icons.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
