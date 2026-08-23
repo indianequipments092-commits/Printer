@@ -40,22 +40,17 @@ old_bitmap_add = 'bitmaps.add(transformBitmap(b))'
 new_bitmap_add = 'bitmaps.add(if(autoRotate) autoRotateBitmap(transformBitmap(b)) else transformBitmap(b))'
 s = s.replace(old_bitmap_add, new_bitmap_add)
 
-if 'private fun autoRotateBitmap(' not in s:
-    anchor_rotate = '    private fun drawScaled(c:Canvas,b:Bitmap,x:Float,y:Float,w:Float,h:Float)'
-    rotate_fn = '''    private fun autoRotateBitmap(src:Bitmap):Bitmap {\n        val targetLandscape = orientation == "Landscape"\n        val sourceLandscape = src.width > src.height\n        if (orientation == "Portrait" && !sourceLandscape) return src\n        if (orientation == "Landscape" && sourceLandscape) return src\n        if (orientation == "Auto") return src\n        val matrix = Matrix().apply { postRotate(90f) }\n        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)\n        if (rotated !== src && !src.isRecycled) src.recycle()\n        return rotated\n    }\n\n'''
-    if anchor_rotate in s:
-        s = s.replace(anchor_rotate, rotate_fn + anchor_rotate, 1)
-
-# Fix Kotlin's smart-cast restriction in the PDF viewer. bitmap is mutable,
-# so capture it in an immutable local before rendering.
+# Fix Kotlin smart-cast restrictions by never using the mutable bitmap property
+# directly at the PdfRenderer call site.
 old_pdf_render = 'page!!.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)'
-new_pdf_render = 'val renderedBitmap = bitmap ?: return; page!!.render(renderedBitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)'
-if old_pdf_render in s and new_pdf_render not in s:
+new_pdf_render = 'bitmap?.let { renderedBitmap -> page!!.render(renderedBitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY) }'
+if old_pdf_render in s:
     s = s.replace(old_pdf_render, new_pdf_render, 1)
+# Also repair the intermediate form from the previous failed patch if present.
+s = s.replace('val renderedBitmap = bitmap ?: return; page!!.render(renderedBitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)', new_pdf_render, 1)
 
 # The current Printex implementation already provides its own bottom navigation,
 # printer status and settings. Do not inject the legacy helper block into it.
-# Keep the legacy injection available only for older source versions.
 if 'private fun buildBottomNav()' not in s and 'private fun navBar()' not in s:
     anchor = '    private fun handleIntent(i: Intent?) {'
     block = r'''    private fun buildBottomNav(): View {
