@@ -7,4 +7,13 @@
         <item name="android:statusBarColor">#FFFFFF</item>
         <item name="android:windowLightStatusBar">true</item>
     </style>
+    <style name="PrintexTheme" parent="AppTheme">
+        <item name="android:windowAnimationStyle">@style/PrintexAnimation</item>
+    </style>
+    <style name="PrintexAnimation">
+        <item name="android:activityOpenEnterAnimation">@anim/no_animation</item>
+        <item name="android:activityOpenExitAnimation">@anim/no_animation</item>
+        <item name="android:activityCloseEnterAnimation">@anim/no_animation</item>
+        <item name="android:activityCloseExitAnimation">@anim/no_animation</item>
+    </style>
 </resources>
