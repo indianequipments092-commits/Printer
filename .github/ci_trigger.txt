@@ -1,1 +1,0 @@
-CI trigger marker for Printex verification. This file intentionally changes repository content so the push workflow runs and produces a real Gradle build result for the current implementation.
