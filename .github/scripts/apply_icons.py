@@ -5,17 +5,10 @@ MAIN = ROOT / 'app/src/main/java/com/indianequipments/usbscanner/MainActivity.kt
 RES = ROOT / 'app/src/main/res/drawable'
 RES.mkdir(parents=True, exist_ok=True)
 
-def replace(path, old, new):
-    if not path.exists():
-        print(f'Skipping missing optional file: {path}')
-        return
-    s = path.read_text(encoding='utf-8')
-    if old in s:
-        path.write_text(s.replace(old, new, 1), encoding='utf-8')
-
-replace(MAIN, '''        navButton("⌂", "Home", 0)\n        navButton("◎", "Studio", 1)\n        navButton("▦", "Library", 2)\n        navButton("▣", "Printex", 3)''', '''        navButton(R.drawable.ic_home, "Home", 0)\n        navButton(R.drawable.ic_studio, "Studio", 1)\n        navButton(R.drawable.ic_library, "Library", 2)\n        navButton(R.drawable.ic_printer, "Printex", 3)''')
-
-# Standalone PrintExActivity was intentionally removed. Never require it here.
+# IMPORTANT: Printex navigation is owned by fix_printex_controls.py.
+# This script only creates icon resources and never changes navButton argument types.
+if not MAIN.exists():
+    raise SystemExit(f'Missing required file: {MAIN}')
 
 icons = {
 'ic_home.xml': '<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="28dp" android:height="28dp" android:viewportWidth="64" android:viewportHeight="64"><path android:fillColor="#FFFFFF" android:pathData="M8,29 L32,8 L56,29 L52,34 L52,55 L12,55 L12,34 Z"/><path android:fillColor="#287CC9" android:pathData="M27,55 L27,39 L37,39 L37,55 Z"/></vector>',
@@ -25,4 +18,5 @@ icons = {
 }
 for name, data in icons.items():
     (RES / name).write_text(data, encoding='utf-8')
-print('Applied scanner/Printex icons')
+
+print('Applied scanner/Printex icons without changing navigation code')
