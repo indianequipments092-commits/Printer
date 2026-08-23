@@ -31,4 +31,11 @@ ms = MANIFEST.read_text(encoding='utf-8')
 if 'android:icon="@drawable/app_logo"' not in ms:
     ms = ms.replace('<application android:theme="@style/AppTheme" android:label="USB Scanner"', '<application android:theme="@style/AppTheme" android:label="USB Scanner" android:icon="@drawable/app_logo"', 1)
 MANIFEST.write_text(ms, encoding='utf-8')
-print('Applied safe-area, scanner persistence, Printex routing, and unique app-logo fixes')
+
+# patch_printex is deliberately run here because the workflow already calls this
+# script before the icon pass. This keeps the generated build source deterministic.
+patcher = Path('.github/scripts/patch_printex.py')
+if patcher.exists():
+    exec(compile(patcher.read_text(encoding='utf-8'), str(patcher), 'exec'), {'__file__': str(patcher)})
+
+print('Applied safe-area, scanner persistence, Printex routing, Printex upgrade, and unique app-logo fixes')
