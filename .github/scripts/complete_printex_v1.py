@@ -5,12 +5,16 @@ if not p.exists():
     raise SystemExit(f'Missing required file: {p}')
 s = p.read_text(encoding='utf-8')
 
+# Remove Printex-only forbidden legacy controls left by earlier generator passes.
+s = s.replace('    private var printexRotation = 0\n', '')
+s = '\n'.join(line for line in s.split('\n') if 'printexRotation' not in line and 'actionButton("SHARE")' not in line)
+
 # Add state used by the real document renderer.
 marker = '    private var printexPages = "All pages"\n'
 if marker in s and 'private var printexPageRange' not in s:
     s = s.replace(marker, marker + '    private var printexPageRange = ""\n', 1)
 
-# Put Library beside PDF/Photo/Preview, and make the preview default fit-to-page.
+# Put Library beside PDF/Photo/Preview.
 old = 'source.addView(tile("▤", "PDF / File") { printexChooseFile() }, weight(1f,4))\n        source.addView(tile("▧", "Photo") { printexChooseFile() }, weight(1f,4))\n        source.addView(tile("▦", "Preview") { printexOpenPreview() }, weight(1f,4))'
 new = 'source.addView(tile("▤", "PDF / File") { printexChooseFile() }, weight(1f,4))\n        source.addView(tile("▧", "Photo") { printexChooseFile() }, weight(1f,4))\n        source.addView(tile("▦", "Library") { printexOpenLibrary() }, weight(1f,4))\n        source.addView(tile("▣", "Preview") { printexOpenPreview() }, weight(1f,4))'
 if old in s:
@@ -22,13 +26,11 @@ needle = '        printexImageRow(ims, "Contrast", printexContrast) { printexCon
 if needle in s and 'actionButton("DEFAULT")' not in s:
     s = s.replace(needle, needle + '        ims.addView(actionButton("DEFAULT") { printexResetDefaults() }, LinearLayout.LayoutParams(-1, dp(46)).apply { setMargins(0,dp(8),0,0) })\n', 1)
 
-# Add Library entry and a real manual page-range editor to the settings UI.
+# Add a real manual page-range editor.
 s = s.replace('printexSettingRow(ps, "Pages", printexPages) { printexChoose("Pages", arrayOf("All pages","Odd pages","Even pages","Selected pages","Page range")) { printexPages = it; renderTab(3) } }',
 '''printexSettingRow(ps, "Pages", if (printexPages == "Page range" && printexPageRange.isNotBlank()) "Page range: $printexPageRange" else printexPages) {
             printexChoosePages()
         }''', 1)
-
-# Replace the old simple Pages chooser with a chooser that accepts 1,3,5 and 1-5 syntax.
 old_pages = '    private fun printexChooseCopies() {'
 if old_pages in s and 'private fun printexChoosePages()' not in s:
     helper = r'''    private fun printexChoosePages() {
@@ -48,7 +50,7 @@ if old_pages in s and 'private fun printexChoosePages()' not in s:
                 AlertDialog.Builder(this).setTitle("Page Range").setMessage("Enter pages such as 1,3,5 or 1-5").setView(input)
                     .setPositiveButton("APPLY") { _, _ ->
                         val value = input.text.toString().trim()
-                        if (value.isBlank() || printexPageIndices(value, Int.MAX_VALUE).isNotEmpty()) {
+                        if (value.isBlank() || value.split(',').all { token -> token.trim().matches(Regex("\\d+(-\\d+)?")) }) {
                             printexPages = "Page range"
                             printexPageRange = value
                             renderTab(3)
@@ -61,7 +63,6 @@ if old_pages in s and 'private fun printexChoosePages()' not in s:
 '''
     s = s.replace(old_pages, helper + old_pages, 1)
 
-# Add all real Printex helpers before the common dp() helper.
 anchor = '    private fun dp('
 if anchor not in s:
     raise SystemExit('Could not find dp() insertion anchor')
@@ -89,20 +90,13 @@ if 'private fun printexPageIndices(' not in s:
 
     private fun printexOpenLibrary() {
         val files = library.list()
-        if (files.isEmpty()) {
-            Toast.makeText(this, "Library is empty", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (files.isEmpty()) { Toast.makeText(this, "Library is empty", Toast.LENGTH_SHORT).show(); return }
         val labels = files.map { it.name }.toTypedArray()
-        AlertDialog.Builder(this).setTitle("Library").setItems(labels) { _, which -> printexUseSelectedLibraryFile(files[which]) }
-            .setNegativeButton("CANCEL", null).show()
+        AlertDialog.Builder(this).setTitle("Library").setItems(labels) { _, which -> printexUseSelectedLibraryFile(files[which]) }.setNegativeButton("CANCEL", null).show()
     }
 
     private fun printexUseSelectedLibraryFile(file: File) {
-        if (!file.exists()) {
-            Toast.makeText(this, "Library file is no longer available", Toast.LENGTH_SHORT).show()
-            return
-        }
+        if (!file.exists()) { Toast.makeText(this, "Library file is no longer available", Toast.LENGTH_SHORT).show(); return }
         printexFile = file
         printexUri = Uri.fromFile(file)
         printexPageRange = ""
@@ -151,17 +145,14 @@ if 'private fun printexPageIndices(' not in s:
         val result = mutableListOf<Bitmap>()
         selected.forEach { index ->
             val page = renderer.openPage(index)
-            val maxW = 1800
-            val maxH = 2400
-            val scale = minOf(maxW.toFloat() / page.width, maxH.toFloat() / page.height).coerceAtLeast(1f)
+            val scale = minOf(1800f / page.width, 2400f / page.height).coerceAtLeast(1f)
             val bmp = Bitmap.createBitmap((page.width * scale).toInt(), (page.height * scale).toInt(), Bitmap.Config.ARGB_8888)
             bmp.eraseColor(Color.WHITE)
             page.render(bmp, null, null, android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_PRINT)
             page.close()
             result.add(printexApplyAdjustments(bmp))
         }
-        renderer.close()
-        pfd.close()
+        renderer.close(); pfd.close()
         return result
     }
 
@@ -171,55 +162,29 @@ if 'private fun printexPageIndices(' not in s:
         val repeated = mutableListOf<Bitmap>()
         repeat(printexCopies.coerceIn(1, 99)) { source.forEach { repeated.add(it) } }
         val (pageW, pageH) = printexPaperSizePoints()
-        val columns = when {
-            printexLayout.startsWith("2") -> 2
-            printexLayout.startsWith("4") -> 2
-            printexLayout.startsWith("6") -> 3
-            printexLayout.startsWith("9") -> 3
-            else -> 1
-        }
-        val rows = when {
-            printexLayout.startsWith("4") -> 2
-            printexLayout.startsWith("6") -> 2
-            printexLayout.startsWith("9") -> 3
-            else -> 1
-        }
+        val columns = when { printexLayout.startsWith("2") || printexLayout.startsWith("4") -> 2; printexLayout.startsWith("6") || printexLayout.startsWith("9") -> 3; else -> 1 }
+        val rows = when { printexLayout.startsWith("4") -> 2; printexLayout.startsWith("6") -> 2; printexLayout.startsWith("9") -> 3; else -> 1 }
         val pdf = android.graphics.pdf.PdfDocument()
-        var pageNumber = 1
-        var i = 0
+        var pageNumber = 1; var i = 0
         while (i < repeated.size) {
-            val info = android.graphics.pdf.PdfDocument.PageInfo.Builder(pageW, pageH, pageNumber++).create()
-            val page = pdf.startPage(info)
-            val canvas = page.canvas
-            canvas.drawColor(Color.WHITE)
-            val cellW = pageW.toFloat() / columns
-            val cellH = pageH.toFloat() / rows
+            val page = pdf.startPage(android.graphics.pdf.PdfDocument.PageInfo.Builder(pageW, pageH, pageNumber++).create())
+            val canvas = page.canvas; canvas.drawColor(Color.WHITE)
+            val cellW = pageW.toFloat() / columns; val cellH = pageH.toFloat() / rows
             var slot = 0
             while (slot < columns * rows && i < repeated.size) {
                 val bmp = repeated[i++]
-                val left = slot % columns * cellW
-                val top = slot / columns * cellH
-                val margin = 12f
-                val availW = cellW - margin * 2
-                val availH = cellH - margin * 2
-                val scale = when (printexScaling) {
-                    "Actual size" -> 1f
-                    "Fill page" -> maxOf(availW / bmp.width, availH / bmp.height)
-                    "Custom" -> minOf(availW / bmp.width, availH / bmp.height)
-                    else -> minOf(availW / bmp.width, availH / bmp.height)
-                }
-                val dw = bmp.width * scale
-                val dh = bmp.height * scale
-                val l = left + (cellW - dw) / 2f
-                val t = top + (cellH - dh) / 2f
-                canvas.drawBitmap(bmp, null, android.graphics.RectF(l, t, l + dw, t + dh), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
+                val left = slot % columns * cellW; val top = slot / columns * cellH
+                val availW = cellW - 24f; val availH = cellH - 24f
+                val scale = when (printexScaling) { "Actual size" -> 1f; "Fill page" -> maxOf(availW / bmp.width, availH / bmp.height); else -> minOf(availW / bmp.width, availH / bmp.height) }
+                val dw = bmp.width * scale; val dh = bmp.height * scale
+                val l = left + (cellW - dw) / 2f; val t = top + (cellH - dh) / 2f
+                canvas.drawBitmap(bmp, null, android.graphics.RectF(l,t,l+dw,t+dh), android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG or android.graphics.Paint.FILTER_BITMAP_FLAG))
                 slot++
             }
             pdf.finishPage(page)
         }
         val out = File(cacheDir, "Printex_${System.currentTimeMillis()}.pdf")
-        FileOutputStream(out).use { pdf.writeTo(it) }
-        pdf.close()
+        FileOutputStream(out).use { pdf.writeTo(it) }; pdf.close()
         source.forEach { if (!it.isRecycled) it.recycle() }
         return out
     }
@@ -228,30 +193,17 @@ if 'private fun printexPageIndices(' not in s:
         try {
             if (printexFile == null) throw IllegalStateException("Select a PDF, image, or Library file first")
             val printManager = getSystemService(PRINT_SERVICE) as android.print.PrintManager
-            val initial = android.print.PrintAttributes.Builder()
-                .setMediaSize(when (printexPaper) {
-                    "A5" -> android.print.PrintAttributes.MediaSize.ISO_A5
-                    "A3" -> android.print.PrintAttributes.MediaSize.ISO_A3
-                    "Letter" -> android.print.PrintAttributes.MediaSize.NA_LETTER
-                    "Legal" -> android.print.PrintAttributes.MediaSize.NA_LEGAL
-                    else -> android.print.PrintAttributes.MediaSize.ISO_A4
-                }.let { if (printexOrientation == "Landscape") it.asLandscape() else it.asPortrait() })
-                .setColorMode(android.print.PrintAttributes.COLOR_MODE_COLOR)
-                .setDuplexMode(when {
-                    printexDuplex.contains("Long") -> android.print.PrintAttributes.DUPLEX_MODE_LONG_EDGE
-                    printexDuplex.contains("Short") -> android.print.PrintAttributes.DUPLEX_MODE_SHORT_EDGE
-                    else -> android.print.PrintAttributes.DUPLEX_MODE_NONE
-                }).build()
+            val media = when (printexPaper) { "A5" -> android.print.PrintAttributes.MediaSize.ISO_A5; "A3" -> android.print.PrintAttributes.MediaSize.ISO_A3; "Letter" -> android.print.PrintAttributes.MediaSize.NA_LETTER; "Legal" -> android.print.PrintAttributes.MediaSize.NA_LEGAL; else -> android.print.PrintAttributes.MediaSize.ISO_A4 }
+            val initial = android.print.PrintAttributes.Builder().setMediaSize(if (printexOrientation == "Landscape") media.asLandscape() else media.asPortrait()).setColorMode(android.print.PrintAttributes.COLOR_MODE_COLOR).setDuplexMode(when { printexDuplex.contains("Long") -> android.print.PrintAttributes.DUPLEX_MODE_LONG_EDGE; printexDuplex.contains("Short") -> android.print.PrintAttributes.DUPLEX_MODE_SHORT_EDGE; else -> android.print.PrintAttributes.DUPLEX_MODE_NONE }).build()
             val adapter = object : android.print.PrintDocumentAdapter() {
                 private var prepared: File? = null
                 override fun onLayout(oldAttributes: android.print.PrintAttributes?, newAttributes: android.print.PrintAttributes, cancellationSignal: android.os.CancellationSignal, callback: android.print.PrintDocumentAdapter.LayoutResultCallback, extras: Bundle?) {
                     try {
                         if (cancellationSignal.isCanceled) { callback.onLayoutCancelled(); return }
-                        prepared?.delete()
-                        prepared = printexPrintPdf()
-                        val count = android.graphics.pdf.PdfRenderer(android.os.ParcelFileDescriptor.open(prepared!!, android.os.ParcelFileDescriptor.MODE_READ_ONLY)).use { it.pageCount }
-                        val info = android.print.PrintDocumentInfo.Builder("Printex.pdf").setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build()
-                        callback.onLayoutFinished(info, true)
+                        prepared?.delete(); prepared = printexPrintPdf()
+                        val pfd = android.os.ParcelFileDescriptor.open(prepared!!, android.os.ParcelFileDescriptor.MODE_READ_ONLY)
+                        val renderer = android.graphics.pdf.PdfRenderer(pfd); val count = renderer.pageCount; renderer.close(); pfd.close()
+                        callback.onLayoutFinished(android.print.PrintDocumentInfo.Builder("Printex.pdf").setContentType(android.print.PrintDocumentInfo.CONTENT_TYPE_DOCUMENT).setPageCount(count).build(), true)
                     } catch (t: Throwable) { callback.onLayoutFailed(t.message ?: "Could not prepare print document") }
                 }
                 override fun onWrite(pages: Array<android.print.PageRange>, destination: android.os.ParcelFileDescriptor, cancellationSignal: android.os.CancellationSignal, callback: android.print.PrintDocumentAdapter.WriteResultCallback) {
@@ -265,9 +217,7 @@ if 'private fun printexPageIndices(' not in s:
                 override fun onFinish() { prepared?.delete() }
             }
             printManager.print("Printex", adapter, initial)
-        } catch (t: Throwable) {
-            Toast.makeText(this, "Print failed: ${t.message ?: "Unknown error"}", Toast.LENGTH_LONG).show()
-        }
+        } catch (t: Throwable) { Toast.makeText(this, "Print failed: ${t.message ?: "Unknown error"}", Toast.LENGTH_LONG).show() }
     }
 
 '''
