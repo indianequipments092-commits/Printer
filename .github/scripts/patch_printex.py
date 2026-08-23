@@ -32,20 +32,21 @@ if 'override fun onResume()' not in s:
 
 s = s.replace('            pm.print("Printex • ${fileName.text}",object:PrintDocumentAdapter(){', '            recordPrintHistory(file.name)\n            pm.print("Printex • ${fileName.text}",object:PrintDocumentAdapter(){', 1)
 
-# Make Auto Rotate real in the generated print document. The page is rotated only
-# when the selected orientation requires it; no stretching is introduced.
 old_bitmap_add = 'bitmaps.add(transformBitmap(b))'
 new_bitmap_add = 'bitmaps.add(if(autoRotate) autoRotateBitmap(transformBitmap(b)) else transformBitmap(b))'
 s = s.replace(old_bitmap_add, new_bitmap_add)
 
 if 'private fun autoRotateBitmap(' not in s:
     anchor_rotate = '    private fun drawScaled(c:Canvas,b:Bitmap,x:Float,y:Float,w:Float,h:Float)'
-    rotate_fn = '''    private fun autoRotateBitmap(src:Bitmap):Bitmap {\n        val targetLandscape = orientation == "Landscape"\n        val sourceLandscape = src.width > src.height\n        if (orientation == "Portrait" && !sourceLandscape) return src\n        if (orientation == "Landscape" && sourceLandscape) return src\n        if (orientation == "Auto") return src\n        val matrix = Matrix().apply { postRotate(if (targetLandscape) 90f else 90f) }\n        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)\n        if (rotated !== src && !src.isRecycled) src.recycle()\n        return rotated\n    }\n\n'''
+    rotate_fn = '''    private fun autoRotateBitmap(src:Bitmap):Bitmap {\n        val targetLandscape = orientation == "Landscape"\n        val sourceLandscape = src.width > src.height\n        if (orientation == "Portrait" && !sourceLandscape) return src\n        if (orientation == "Landscape" && sourceLandscape) return src\n        if (orientation == "Auto") return src\n        val matrix = Matrix().apply { postRotate(90f) }\n        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)\n        if (rotated !== src && !src.isRecycled) src.recycle()\n        return rotated\n    }\n\n'''
     if anchor_rotate in s:
         s = s.replace(anchor_rotate, rotate_fn + anchor_rotate, 1)
 
-anchor = '    private fun handleIntent(i: Intent?) {'
-if 'private fun buildBottomNav()' not in s:
+# The current Printex implementation already provides its own bottom navigation,
+# printer status and settings. Do not inject the legacy helper block into it.
+# Keep the legacy injection available only for older source versions.
+if 'private fun buildBottomNav()' not in s and 'private fun navBar()' not in s:
+    anchor = '    private fun handleIntent(i: Intent?) {'
     block = r'''    private fun buildBottomNav(): View {
         val nav = LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL; gravity=Gravity.CENTER; setPadding(dp(8),dp(6),dp(8),dp(6)); background=rounded(PANEL,20) }
         nav.addView(navButton("⌂", "Home") { openScannerTab(0) }, navWeight())
