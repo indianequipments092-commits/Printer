@@ -7,7 +7,7 @@ if not MAIN.exists():
 
 s = MAIN.read_text(encoding='utf-8')
 
-# This step is verification only: it must never silently patch source.
+# Verification only. This script must never modify source.
 required = {
     'Printex navigation': 'navButton("▣", "Printex", 3)',
     'Tools navigation': 'navButton("⚙", "Tools", 4)',
@@ -16,7 +16,9 @@ required = {
     'PDF renderer': 'android.graphics.pdf.PdfRenderer',
     'Preview': 'printexOpenPreview()',
     'Fit-to-page preview': 'ImageView.ScaleType.FIT_CENTER',
-    'Zoom handler': 'printexZoomTouch',
+    'Zoom handler': 'private fun printexZoomTouch',
+    'Zoom state': 'private var printexZoom = 1f',
+    'Preview applies image settings': 'private fun printexPreviewBitmap()',
     'Library entry': 'printexOpenLibrary()',
     'Library selection': 'printexUseSelectedLibraryFile()',
     'Print settings': 'private fun printexPrintSettings()',
@@ -33,8 +35,14 @@ required = {
     'Contrast': 'printexContrast',
     'Default': 'actionButton("DEFAULT")',
     'Rendered print PDF': 'private fun printexPrintPdf()',
+    'Brightness/contrast renderer': 'private fun printexAdjust',
     'Print action': 'actionButton("PRINT")',
     'PrintManager': 'android.print.PrintManager',
+    'Paper size print attributes': 'setMediaSize(',
+    'Duplex print attributes': 'setDuplexMode(',
+    'Copies rendered': 'repeat(printexCopies',
+    'Scaling rendered': 'printexScaling',
+    'Layout rendered': 'printexLayout',
 }
 missing = [name for name, token in required.items() if token not in s]
 if missing:
@@ -44,7 +52,7 @@ for forbidden in ('actionButton("SHARE")', 'printexRotation', '"Rotation"', 'Sma
     if forbidden in s:
         raise SystemExit(f'Printex V1 verification failed; forbidden item remains: {forbidden}')
 
-# The old standalone activity must not be referenced anywhere in the app or scripts.
+# Old standalone activity must not be referenced anywhere in app source/scripts.
 for p in ROOT.rglob('*'):
     if not p.is_file() or p.suffix not in {'.kt', '.java', '.py', '.xml'}:
         continue
@@ -52,12 +60,11 @@ for p in ROOT.rglob('*'):
     if 'PrintExActivity' in text:
         raise SystemExit(f'Legacy PrintExActivity reference remains in {p}')
 
-# Basic structural sanity checks catch accidental truncated/generated Kotlin.
-for token in ('private fun renderPrintex()', 'private fun printexPrintPdf()', 'private fun printexPrint()'):
-    start = s.find(token)
-    if start < 0:
-        raise SystemExit(f'Missing function body: {token}')
-    if s.find('{', start) < 0:
-        raise SystemExit(f'Function has no opening brace: {token}')
+# Catch the exact regression that caused the previous loop: a Float must never be
+# treated as lateinit, and the generated print writer must have FileInputStream.
+if '::printexZoom.isInitialized' in s:
+    raise SystemExit('Printex V1 verification failed: invalid lateinit check on Float printexZoom')
+if 'FileInputStream' not in s:
+    raise SystemExit('Printex V1 verification failed: FileInputStream missing from print writer')
 
-print('Printex V1 source verification passed: integrated navigation, preview, Library, settings, rendering, printing, and forbidden-feature checks are present.')
+print('Printex V1 source verification passed: navigation, fit preview/zoom, Library, settings, rendered effects, printing, and forbidden-feature checks are present.')
