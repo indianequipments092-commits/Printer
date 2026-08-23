@@ -13,22 +13,29 @@ required = {
     'Image settings': 'IMAGE SETTINGS',
     'Brightness': 'Brightness',
     'Contrast': 'Contrast',
-    'Default print settings': 'Print Settings restored to default',
+    'Default button': 'actionButton("DEFAULT")',
     'Print action': 'actionButton("PRINT")',
-    'Share action': 'actionButton("SHARE")',
+    'Library picker': 'printexOpenLibrary()',
+    'Library selection': 'printexUseSelectedLibraryFile()',
     'Duplex': 'Duplex',
     'Copies': 'Copies',
     'Pages': 'Pages',
+    'Page range parser': 'printexPageIndices',
     'Paper size': 'Paper Size',
     'Orientation': 'Orientation',
     'Scaling': 'Scaling',
     'Multi-page': 'Multi-Page Printing',
+    'Rendered print PDF': 'printexPrintPdf()',
 }
 missing = [name for name, token in required.items() if token not in s]
 if missing:
     raise SystemExit('Printex verification failed; missing: ' + ', '.join(missing))
 
-# Standalone Printex must never be a build dependency.
+if 'actionButton("SHARE")' in s:
+    raise SystemExit('Share button must not be present in Printex')
+if 'printexRotation' in s or '"Rotation"' in s:
+    raise SystemExit('Rotation must not be present in Printex')
+
 for p in Path('ScannerApp').rglob('*'):
     if p.is_file() and p.suffix in {'.kt', '.java', '.py', '.xml'}:
         try:
@@ -38,8 +45,7 @@ for p in Path('ScannerApp').rglob('*'):
         if 'PrintExActivity.kt' in text or 'PrintExActivity' in text:
             raise SystemExit(f'Legacy PrintExActivity reference remains in {p}')
 
-# Smart Print is intentionally not part of the approved UI.
 if 'Smart Print' in s or 'SMART PRINT' in s:
     raise SystemExit('Smart Print must not be present')
 
-print('Printex verification passed: integrated navigation, print settings, image settings, PDF preview, print/share, and no legacy dependency.')
+print('Printex verification passed: integrated navigation, functional print rendering, settings, image adjustments, Library selection, and no legacy dependency.')
