@@ -30,6 +30,7 @@ jobs:
         run: |
           cd ..
           python3 .github/scripts/upgrade_ui.py
+          python3 .github/scripts/fix_printex_controls.py
           python3 .github/scripts/apply_icons.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
