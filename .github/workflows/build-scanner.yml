@@ -15,10 +15,13 @@
           python3 .github/scripts/step2_compile_fix.py
           python3 .github/scripts/step3_ui_completion.py
           python3 .github/scripts/step3_functionality.py
-          python3 .github/scripts/verify_step3.py
           python3 .github/scripts/apply_icons.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
+      - name: Verify Step 3 source
+        run: |
+          cd ..
+          python3 .github/scripts/verify_step3.py
       - name: Verify APK output
         run: |
           test -f app/build/outputs/apk/debug/app-debug.apk
