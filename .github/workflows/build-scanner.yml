@@ -1,3 +1,20 @@
+name: Build USB Scanner APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ScannerApp
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
