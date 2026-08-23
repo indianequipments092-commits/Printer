@@ -26,19 +26,11 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
-      - name: Apply USB Scanner UI and fresh integrated Printex
+      - name: Apply USB Scanner UI
         run: |
           cd ..
           python3 .github/scripts/upgrade_ui.py
-          python3 .github/scripts/fix_printex_controls.py
-          python3 .github/scripts/repair_printex_build.py
-          python3 .github/scripts/finalize_printex.py
-          python3 .github/scripts/finalize_printex_build.py
-          python3 .github/scripts/complete_printex_v1.py
-          python3 .github/scripts/verify_printex_source.py
-          python3 .github/scripts/preview_printex_settings.py
           python3 .github/scripts/apply_icons.py
-          python3 .github/scripts/verify_printex.py
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
       - name: Verify APK output
@@ -48,5 +40,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: usb-scanner-printex-debug-apk
+          name: usb-scanner-debug-apk
           path: ScannerApp/app/build/outputs/apk/debug/app-debug.apk
