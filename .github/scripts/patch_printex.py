@@ -3,9 +3,13 @@ from pathlib import Path
 PRINT = Path('ScannerApp/app/src/main/java/com/indianequipments/usbscanner/PrintExActivity.kt')
 s = PRINT.read_text(encoding='utf-8')
 
+# Context is already imported by the current Printex activity. Only inject
+# UsbManager here; adding Context again makes Kotlin report an ambiguous import.
 if 'import android.hardware.usb.UsbManager' not in s:
-    s = s.replace('import android.graphics.pdf.PdfRenderer\n', 'import android.graphics.pdf.PdfRenderer\nimport android.content.Context\nimport android.hardware.usb.UsbManager\n', 1)
+    s = s.replace('import android.graphics.pdf.PdfRenderer\n', 'import android.graphics.pdf.PdfRenderer\nimport android.hardware.usb.UsbManager\n', 1)
 
+# Keep the existing Printex implementation as the source of truth. These
+# guarded edits are retained for older source revisions used by the workflow.
 if 'private lateinit var printerStatusView: TextView' not in s:
     s = s.replace('private var generatedPrintFile: File? = null', 'private var generatedPrintFile: File? = null\n    private lateinit var printerStatusView: TextView\n    private val prefs by lazy { getSharedPreferences("printex_prefs", MODE_PRIVATE) }', 1)
 
@@ -42,6 +46,13 @@ if 'private fun autoRotateBitmap(' not in s:
     if anchor_rotate in s:
         s = s.replace(anchor_rotate, rotate_fn + anchor_rotate, 1)
 
+# Fix Kotlin's smart-cast restriction in the PDF viewer. bitmap is mutable,
+# so capture it in an immutable local before rendering.
+old_pdf_render = 'page!!.render(bitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)'
+new_pdf_render = 'val renderedBitmap = bitmap ?: return; page!!.render(renderedBitmap,null,null,PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)'
+if old_pdf_render in s and new_pdf_render not in s:
+    s = s.replace(old_pdf_render, new_pdf_render, 1)
+
 # The current Printex implementation already provides its own bottom navigation,
 # printer status and settings. Do not inject the legacy helper block into it.
 # Keep the legacy injection available only for older source versions.
@@ -75,7 +86,7 @@ if 'private fun buildBottomNav()' not in s and 'private fun navBar()' not in s:
         if (!::printerStatusView.isInitialized) return
         val d = connectedUsbPrinter()
         if (d == null) { printerStatusView.text = "Printer is not connected"; printerStatusView.setTextColor(Color.rgb(255,170,90)) }
-        else { val name = d.productName?.takeIf { it.isNotBlank() } ?: d.manufacturerName?.takeIf { it.isNotBlank() } ?: d.deviceName; printerStatusView.text = "●  $name Connected"; printerStatusView.setTextColor(Color.rgb(75,220,145)) }
+        else { val name = d.productName?.takeIf { it.isNotBlank() } ?: d.manufacturerName?.takeIf { it.isNotBlank() } ?: d.deviceName; printerStatusView.text = "● $name Connected"; printerStatusView.setTextColor(Color.rgb(75,220,145)) }
     }
     private fun showMoreMenu() {
         val items = arrayOf("Printer Management", "Print Queue", "Print History", "Default Print Settings", "Printer Diagnostics", "App Settings")
@@ -109,4 +120,4 @@ if start != -1:
 '''
 
 PRINT.write_text(s, encoding='utf-8')
-print('Applied Printex safe-area, live printer status, advanced menu, bottom navigation, print history, auto-rotate output, and fit-to-page viewer')
+print('Applied safe Printex patch and fixed repeat-build Kotlin errors')
