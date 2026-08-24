@@ -35,6 +35,13 @@ jobs:
           python3 .github/scripts/step2_compile_fix.py
           python3 .github/scripts/step3_ui_completion.py
           python3 .github/scripts/step3_functionality.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/scripts/step4_printer_workflow.py')
+          text = p.read_text(encoding='utf-8')
+          if text.rstrip().endswith("'''"):
+              p.write_text(text.rstrip()[:-3] + "\n", encoding='utf-8')
+          PY
           python3 .github/scripts/step4_printer_workflow.py
           python3 .github/scripts/step4_settings_library.py
           python3 .github/scripts/apply_icons.py
