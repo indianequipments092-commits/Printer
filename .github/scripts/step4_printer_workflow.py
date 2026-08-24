@@ -40,7 +40,7 @@ new_home = '''    private fun renderHome() {
         deviceCard.addView(printerModelView)
         val printerRow = row()
         printerRow.addView(actionButton("SELECT PRINTER") { showPrinterSelector() }, weight(1f,4))
-        printerRow.addView(actionButton("REFRESH") { refreshPrinters() }, weight(1f,4))
+        printerRow.addView(actionButton("↻  REFRESH") { refreshPrinters() }, weight(1f,4))
         deviceCard.addView(printerRow, LinearLayout.LayoutParams(-1, dp(48)).apply { setMargins(0,dp(14),0,0) })
         content.addView(deviceCard, margin(0,10))
 
