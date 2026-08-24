@@ -10,7 +10,9 @@ required = {
     "Printer Connected": '"Printer Connected"',
     "Printer Model": '"Printer Model',
     "Select Printer": '"SELECT PRINTER"',
-    "Refresh": '"REFRESH"',
+    # The UI intentionally includes the refresh icon before the label.
+    # Verify the user-visible label rather than requiring an exact quoted string.
+    "Refresh": 'REFRESH',
     "WiFi": '"WiFi"',
     "Bluetooth": '"Bluetooth"',
     "USB": '"USB"',
