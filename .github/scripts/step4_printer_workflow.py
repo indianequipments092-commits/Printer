@@ -7,16 +7,105 @@ MAIN = ROOT / "ScannerApp/app/src/main/java/com/indianequipments/usbscanner/Main
 s = MAIN.read_text(encoding="utf-8")
 
 # Step 4 printer state
-s = s.replace('    private var pendingTempPdf: File? = null\n', '''    private var pendingTempPdf: File? = null\n    private var printerStatusView: TextView? = null\n    private var printerModelView: TextView? = null\n    private var selectedPrinterName: String? = null\n    private val printerPrefs by lazy { getSharedPreferences("printer_prefs", MODE_PRIVATE) }\n''')
+s = s.replace('    private var pendingTempPdf: File? = null\n', '''    private var pendingTempPdf: File? = null
+    private var printerStatusView: TextView? = null
+    private var printerModelView: TextView? = null
+    private var selectedPrinterName: String? = null
+    private val printerPrefs by lazy { getSharedPreferences("printer_prefs", MODE_PRIVATE) }
+''')
 
 home_pat = re.compile(r'    private fun renderHome\(\) \{.*?\n    \}\n\n    private fun renderStudio', re.S)
-new_home = '''    private fun renderHome() {\n        content.addView(title("USB SCANNER", "MAHA ADVANCED+ • PROFESSIONAL SCAN STUDIO"))\n        val deviceCard = card()\n        deviceCard.addView(TextView(this).apply {\n            textSize = 12f\n            setTextColor(Color.rgb(145,160,180))\n            text = "PRINTER STATUS"\n        })\n        printerStatusView = TextView(this).apply {\n            textSize = 20f\n            typeface = Typeface.DEFAULT_BOLD\n            setTextColor(if (selectedPrinterName.isNullOrBlank()) Color.rgb(255,196,70) else Color.rgb(80,220,150))\n            text = if (selectedPrinterName.isNullOrBlank()) "Printer Not Found" else "Printer Connected"\n            setPadding(0,dp(5),0,0)\n        }\n        deviceCard.addView(printerStatusView)\n        printerModelView = TextView(this).apply {\n            text = "Printer Model • ${selectedPrinterName ?: "Not detected"}"\n            textSize = 12f\n            setTextColor(Color.rgb(120,136,158))\n            setPadding(0,dp(4),0,0)\n        }\n        deviceCard.addView(printerModelView)\n        val printerRow = row()\n        printerRow.addView(actionButton("SELECT PRINTER") { showPrinterSelector() }, weight(1f,4))\n        printerRow.addView(actionButton("REFRESH") { refreshPrinters() }, weight(1f,4))\n        deviceCard.addView(printerRow, LinearLayout.LayoutParams(-1, dp(48)).apply { setMargins(0,dp(14),0,0) })\n        content.addView(deviceCard, margin(0,10))\n\n        val hero = card()\n        hero.addView(TextView(this).apply {\n            text = "SCAN STUDIO"\n            textSize = 13f\n            typeface = Typeface.DEFAULT_BOLD\n            setTextColor(Color.rgb(130,160,200))\n        })\n        hero.addView(TextView(this).apply {\n            text = "Turn paper into a polished digital document"\n            textSize = 23f\n            typeface = Typeface.DEFAULT_BOLD\n            setTextColor(Color.WHITE)\n            setPadding(0,dp(6),0,dp(2))\n        })\n        hero.addView(TextView(this).apply {\n            text = "Multi-page • Preview • Enhance • Edit • Export • Share"\n            textSize = 12f\n            setTextColor(Color.rgb(150,165,185))\n        })\n        hero.addView(actionButton("＋  NEW SCAN") { renderTab(1) }, LinearLayout.LayoutParams(-1, dp(54)).apply { setMargins(0,dp(18),0,0) })\n        content.addView(hero, margin(0,12))\n\n        val stats = row()\n        stats.addView(statCard("${library.list().size}", "ALL SCANS"), weight(1f,5))\n        stats.addView(statCard("${pages.size}", "CURRENT PAGES"), weight(1f,5))\n        stats.addView(statCard("${selectedLibrary.size}", "SELECTED"), weight(1f,5))\n        content.addView(stats, margin(0,12))\n        content.addView(section("QUICK ACTIONS"))\n        val quick = row()\n        quick.addView(tile("▦", "All Scans") { renderTab(2) }, weight(1f,6))\n        quick.addView(tile("✦", "Enhance") { if (pages.isNotEmpty()) { autoEnhance(); renderTab(1) } else renderTab(1) }, weight(1f,6))\n        quick.addView(tile("↗", "Export") { showShareFormatDialog() }, weight(1f,6))\n        content.addView(quick, margin(0,12))\n        content.addView(section("RECENT DOCUMENTS"))\n        val recent = library.list().take(3)\n        if (recent.isEmpty()) content.addView(emptyCard("No scans yet", "Your scanned pages will appear here."), margin(0,8))\n        recent.forEach { file -> content.addView(fileRow(file), margin(0,8)) }\n    }\n\n    private fun renderStudio'''
+new_home = '''    private fun renderHome() {
+        content.addView(title("USB SCANNER", "MAHA ADVANCED+ • PROFESSIONAL SCAN STUDIO"))
+        val deviceCard = card()
+        deviceCard.addView(TextView(this).apply {
+            textSize = 12f
+            setTextColor(Color.rgb(145,160,180))
+            text = "PRINTER STATUS"
+        })
+        printerStatusView = TextView(this).apply {
+            textSize = 20f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(if (selectedPrinterName.isNullOrBlank()) Color.rgb(255,196,70) else Color.rgb(80,220,150))
+            text = if (selectedPrinterName.isNullOrBlank()) "Printer Not Found" else "Printer Connected"
+            setPadding(0,dp(5),0,0)
+        }
+        deviceCard.addView(printerStatusView)
+        printerModelView = TextView(this).apply {
+            text = "Printer Model • ${selectedPrinterName ?: "Not detected"}"
+            textSize = 12f
+            setTextColor(Color.rgb(120,136,158))
+            setPadding(0,dp(4),0,0)
+        }
+        deviceCard.addView(printerModelView)
+        val printerRow = row()
+        printerRow.addView(actionButton("SELECT PRINTER") { showPrinterSelector() }, weight(1f,4))
+        printerRow.addView(actionButton("REFRESH") { refreshPrinters() }, weight(1f,4))
+        deviceCard.addView(printerRow, LinearLayout.LayoutParams(-1, dp(48)).apply { setMargins(0,dp(14),0,0) })
+        content.addView(deviceCard, margin(0,10))
+
+        val hero = card()
+        hero.addView(TextView(this).apply {
+            text = "SCAN STUDIO"
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.rgb(130,160,200))
+        })
+        hero.addView(TextView(this).apply {
+            text = "Turn paper into a polished digital document"
+            textSize = 23f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+            setPadding(0,dp(6),0,dp(2))
+        })
+        hero.addView(TextView(this).apply {
+            text = "Multi-page • Preview • Enhance • Edit • Export • Share"
+            textSize = 12f
+            setTextColor(Color.rgb(150,165,185))
+        })
+        hero.addView(actionButton("＋  NEW SCAN") { renderTab(1) }, LinearLayout.LayoutParams(-1, dp(54)).apply { setMargins(0,dp(18),0,0) })
+        content.addView(hero, margin(0,12))
+
+        val stats = row()
+        stats.addView(statCard("${library.list().size}", "ALL SCANS"), weight(1f,5))
+        stats.addView(statCard("${pages.size}", "CURRENT PAGES"), weight(1f,5))
+        stats.addView(statCard("${selectedLibrary.size}", "SELECTED"), weight(1f,5))
+        content.addView(stats, margin(0,12))
+        content.addView(section("QUICK ACTIONS"))
+        val quick = row()
+        quick.addView(tile("▦", "All Scans") { renderTab(2) }, weight(1f,6))
+        quick.addView(tile("✦", "Enhance") { if (pages.isNotEmpty()) { autoEnhance(); renderTab(1) } else renderTab(1) }, weight(1f,6))
+        quick.addView(tile("↗", "Export") { showShareFormatDialog() }, weight(1f,6))
+        content.addView(quick, margin(0,12))
+        content.addView(section("RECENT DOCUMENTS"))
+        val recent = library.list().take(3)
+        if (recent.isEmpty()) content.addView(emptyCard("No scans yet", "Your scanned pages will appear here."), margin(0,8))
+        recent.forEach { file -> content.addView(fileRow(file), margin(0,8)) }
+    }
+
+    private fun renderStudio'''
 s, n = home_pat.subn(new_home, s, count=1)
 if n != 1:
-    raise SystemExit("Step 4: renderHome block not found")
+    # Step 3 can legitimately alter whitespace or braces inside renderHome.
+    # Replace the complete region between renderHome and renderStudio instead
+    # of requiring one exact brace pattern.
+    home_start = re.search(r'    private fun renderHome\s*\(\s*\)', s)
+    studio_start = s.find('    private fun renderStudio')
+    if home_start and studio_start > home_start.start():
+        s = s[:home_start.start()] + new_home[:-len('    private fun renderStudio''')] + s[studio_start:]
+    elif 'PRINTER STATUS' in s and 'printerStatusView' in s:
+        print('Step 4 home block already applied; continuing')
+    else:
+        raise SystemExit('Step 4: renderHome block not found and renderStudio marker unavailable')
 
 # Replace library controls: Grid/List -> Sort, and add Label/Label File.
-s = s.replace('''        controls.addView(tile("↕", "Newest") { renderTab(2) }, weight(1f,4))\n        controls.addView(tile("⌗", "Grid/List") { renderTab(2) }, weight(1f,4))\n        controls.addView(tile("↗", "Share") { showLibraryShareFormatDialog() }, weight(1f,4))''', '''        controls.addView(tile("↕", "Newest") { renderLibrarySorted("newest") }, weight(1f,6))\n        controls.addView(tile("⇅", "Sort") { showSortDialog() }, weight(1f,6))\n        controls.addView(tile("↗", "Share") { showLibraryShareFormatDialog() }, weight(1f,6))\n        controls.addView(tile("🏷", "Label") { labelSelectedScans() }, weight(1f,6))\n        controls.addView(tile("▣", "Label File") { showLabelFiles() }, weight(1f,6))''')
+s = s.replace('''        controls.addView(tile("↕", "Newest") { renderTab(2) }, weight(1f,4))
+        controls.addView(tile("⌗", "Grid/List") { renderTab(2) }, weight(1f,4))
+        controls.addView(tile("↗", "Share") { showLibraryShareFormatDialog() }, weight(1f,4))''', '''        controls.addView(tile("↕", "Newest") { renderLibrarySorted("newest") }, weight(1f,6))
+        controls.addView(tile("⇅", "Sort") { showSortDialog() }, weight(1f,6))
+        controls.addView(tile("↗", "Share") { showLibraryShareFormatDialog() }, weight(1f,6))
+        controls.addView(tile("🏷", "Label") { labelSelectedScans() }, weight(1f,6))
+        controls.addView(tile("▣", "Label File") { showLabelFiles() }, weight(1f,6))''')
 
 # Add printer selector + label/sort helpers before renderTools.
 marker = '    private fun renderTools() {'
@@ -111,7 +200,6 @@ helpers = r'''    private fun showPrinterSelector() {
     }
 
     private fun renderLibrarySorted(mode: String) {
-        // Keep the UI controls identical while applying deterministic local ordering.
         renderTab(2)
         setStatus("Sort: ${mode.replaceFirstChar { it.uppercase() }}")
     }
@@ -172,4 +260,3 @@ s = s.replace('"MF3010 Connected • Ready to scan"', '"Printer Connected • Re
 
 MAIN.write_text(s, encoding="utf-8")
 print("Step 4 printer workflow applied")
-'''
