@@ -5,9 +5,8 @@ import android.app.Application
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.view.ViewGroup
-import android.widget.FrameLayout
+import android.widget.LinearLayout
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
@@ -20,7 +19,6 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 class AdsApplication : Application() {
     companion object {
-        // Google test IDs are used only by debug APKs so the ads can be verified safely.
         private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
         private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
         private const val REAL_BANNER_ID = "ca-app-pub-7161528961319519/5539637210"
@@ -43,9 +41,7 @@ class AdsApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        MobileAds.initialize(this) {
-            loadInterstitial()
-        }
+        MobileAds.initialize(this) { loadInterstitial() }
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityCreated(activity: Activity, state: Bundle?) {
                 currentActivity = activity
@@ -80,7 +76,9 @@ class AdsApplication : Application() {
 
     private fun attachBanner(activity: Activity) {
         val content = activity.findViewById<ViewGroup>(android.R.id.content) ?: return
-        if (content.findViewWithTag<AdView>("usb_scanner_banner") != null) return
+        val root = if (content.childCount > 0) content.getChildAt(0) as? ViewGroup else null
+        if (root == null) return
+        if (root.findViewWithTag<AdView>("usb_scanner_banner") != null) return
 
         val banner = AdView(activity).apply {
             tag = "usb_scanner_banner"
@@ -93,14 +91,16 @@ class AdsApplication : Application() {
             )
         }
 
-        val params = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            Gravity.BOTTOM
-        ).apply {
-            bottomMargin = (82 * resources.displayMetrics.density).toInt()
-        }
-        content.addView(banner, params)
+        // Put the banner BELOW the existing bottom navigation instead of overlaying it.
+        // The root LinearLayout already has a weighted ScrollView, so adding the banner
+        // here naturally reduces the scroll area and keeps all navigation buttons visible.
+        root.addView(
+            banner,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+        )
         banner.loadAd(AdRequest.Builder().build())
     }
 
