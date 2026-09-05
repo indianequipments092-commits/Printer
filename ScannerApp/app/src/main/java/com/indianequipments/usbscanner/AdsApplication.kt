@@ -22,10 +22,12 @@ class AdsApplication : Application() {
         private const val BANNER_AD_UNIT_ID = "ca-app-pub-7161528961319519/5539637210"
         private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-7161528961319519/4034983856"
         private const val MIN_INTERSTITIAL_INTERVAL_MS = 120_000L
+        private const val BACKGROUND_THRESHOLD_MS = 60_000L
     }
 
     private var interstitialAd: InterstitialAd? = null
     private var lastInterstitialShownAt = 0L
+    private var lastStoppedAt = 0L
     private var currentActivity: Activity? = null
     private val handler = Handler(Looper.getMainLooper())
 
@@ -44,11 +46,20 @@ class AdsApplication : Application() {
 
             override fun onActivityResumed(activity: Activity) {
                 currentActivity = activity
-                handler.post { attachBanner(activity) }
+                handler.post {
+                    attachBanner(activity)
+                    if (lastStoppedAt > 0L && System.currentTimeMillis() - lastStoppedAt >= BACKGROUND_THRESHOLD_MS) {
+                        handler.postDelayed({ showInterstitialIfReady(activity) }, 500L)
+                    }
+                }
             }
 
             override fun onActivityPaused(activity: Activity) {}
-            override fun onActivityStopped(activity: Activity) {}
+
+            override fun onActivityStopped(activity: Activity) {
+                if (!activity.isChangingConfigurations) lastStoppedAt = System.currentTimeMillis()
+            }
+
             override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
 
             override fun onActivityDestroyed(activity: Activity) {
@@ -110,7 +121,7 @@ class AdsApplication : Application() {
         )
     }
 
-    fun showInterstitialIfReady(activity: Activity) {
+    private fun showInterstitialIfReady(activity: Activity) {
         val now = System.currentTimeMillis()
         if (now - lastInterstitialShownAt < MIN_INTERSTITIAL_INTERVAL_MS) return
         val ad = interstitialAd ?: return
