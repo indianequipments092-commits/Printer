@@ -8,6 +8,7 @@ import android.os.Looper
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.FrameLayout
+import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
@@ -19,11 +20,20 @@ import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback
 
 class AdsApplication : Application() {
     companion object {
-        private const val BANNER_AD_UNIT_ID = "ca-app-pub-7161528961319519/5539637210"
-        private const val INTERSTITIAL_AD_UNIT_ID = "ca-app-pub-7161528961319519/4034983856"
+        // Google test IDs are used only by debug APKs so the ads can be verified safely.
+        private const val TEST_BANNER_ID = "ca-app-pub-3940256099942544/6300978111"
+        private const val TEST_INTERSTITIAL_ID = "ca-app-pub-3940256099942544/1033173712"
+        private const val REAL_BANNER_ID = "ca-app-pub-7161528961319519/5539637210"
+        private const val REAL_INTERSTITIAL_ID = "ca-app-pub-7161528961319519/4034983856"
         private const val MIN_INTERSTITIAL_INTERVAL_MS = 120_000L
         private const val BACKGROUND_THRESHOLD_MS = 60_000L
     }
+
+    private val bannerAdUnitId: String
+        get() = if (BuildConfig.DEBUG) TEST_BANNER_ID else REAL_BANNER_ID
+
+    private val interstitialAdUnitId: String
+        get() = if (BuildConfig.DEBUG) TEST_INTERSTITIAL_ID else REAL_INTERSTITIAL_ID
 
     private var interstitialAd: InterstitialAd? = null
     private var lastInterstitialShownAt = 0L
@@ -74,14 +84,13 @@ class AdsApplication : Application() {
 
         val banner = AdView(activity).apply {
             tag = "usb_scanner_banner"
-            adUnitId = BANNER_AD_UNIT_ID
+            adUnitId = bannerAdUnitId
             setAdSize(
                 AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
                     activity,
                     (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toInt()
                 )
             )
-            loadAd(AdRequest.Builder().build())
         }
 
         val params = FrameLayout.LayoutParams(
@@ -92,12 +101,13 @@ class AdsApplication : Application() {
             bottomMargin = (82 * resources.displayMetrics.density).toInt()
         }
         content.addView(banner, params)
+        banner.loadAd(AdRequest.Builder().build())
     }
 
     private fun loadInterstitial() {
         InterstitialAd.load(
             this,
-            INTERSTITIAL_AD_UNIT_ID,
+            interstitialAdUnitId,
             AdRequest.Builder().build(),
             object : InterstitialAdLoadCallback() {
                 override fun onAdLoaded(ad: InterstitialAd) {
@@ -108,7 +118,7 @@ class AdsApplication : Application() {
                             loadInterstitial()
                         }
 
-                        override fun onAdFailedToShowFullScreenContent(error: com.google.android.gms.ads.AdError) {
+                        override fun onAdFailedToShowFullScreenContent(error: AdError) {
                             interstitialAd = null
                             loadInterstitial()
                         }
