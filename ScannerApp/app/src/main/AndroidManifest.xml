@@ -1,6 +1,16 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.usb.host" android:required="true" />
-    <application android:theme="@style/AppTheme" android:label="USB Scanner" android:icon="@drawable/usb_scanner_logo" android:roundIcon="@drawable/usb_scanner_logo" android:allowBackup="false" android:supportsRtl="true">
+    <application
+        android:name=".AdsApplication"
+        android:theme="@style/AppTheme"
+        android:label="USB Scanner"
+        android:icon="@drawable/usb_scanner_logo"
+        android:roundIcon="@drawable/usb_scanner_logo"
+        android:allowBackup="false"
+        android:supportsRtl="true">
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-7161528961319519~8295838662" />
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
             <intent-filter><action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" /></intent-filter>
