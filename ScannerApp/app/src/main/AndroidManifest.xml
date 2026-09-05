@@ -6,8 +6,8 @@
         android:name=".AdsApplication"
         android:theme="@style/AppTheme"
         android:label="USB Scanner"
-        android:icon="@drawable/usb_scanner_logo"
-        android:roundIcon="@drawable/usb_scanner_logo"
+        android:icon="@drawable/ic_usb_scanner_foreground"
+        android:roundIcon="@drawable/ic_usb_scanner_foreground"
         android:allowBackup="false"
         android:supportsRtl="true">
         <meta-data
