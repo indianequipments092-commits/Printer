@@ -75,9 +75,11 @@ class AdsApplication : Application() {
         val banner = AdView(activity).apply {
             tag = "usb_scanner_banner"
             adUnitId = BANNER_AD_UNIT_ID
-            adSize = AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
-                activity,
-                (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toInt()
+            setAdSize(
+                AdSize.getCurrentOrientationAnchoredAdaptiveBannerAdSize(
+                    activity,
+                    (resources.displayMetrics.widthPixels / resources.displayMetrics.density).toInt()
+                )
             )
             loadAd(AdRequest.Builder().build())
         }
