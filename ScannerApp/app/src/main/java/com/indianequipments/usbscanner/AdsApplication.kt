@@ -91,16 +91,16 @@ class AdsApplication : Application() {
             )
         }
 
-        // Put the banner BELOW the existing bottom navigation instead of overlaying it.
-        // The root LinearLayout already has a weighted ScrollView, so adding the banner
-        // here naturally reduces the scroll area and keeps all navigation buttons visible.
-        root.addView(
-            banner,
-            LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            )
+        // Keep the app's own content buttons fully visible. MainActivity's root has
+        // the scrollable app content first and the navigation bar last, so the banner
+        // is inserted BETWEEN them. This makes the ScrollView shrink naturally instead
+        // of covering any button at the bottom of the app content.
+        val bannerParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
         )
+        val insertIndex = if (root.childCount > 0) root.childCount - 1 else 0
+        root.addView(banner, insertIndex, bannerParams)
         banner.loadAd(AdRequest.Builder().build())
     }
 
