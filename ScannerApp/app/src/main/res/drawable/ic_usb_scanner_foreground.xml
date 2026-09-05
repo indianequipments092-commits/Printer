@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Cyan scan halo -->
+    <path android:fillColor="#00B8FF" android:pathData="M54,14A40,40 0,1 0,54 94A40,40 0,1 0,54 14" android:fillAlpha="0.16"/>
+    <path android:fillColor="#22C7FF" android:pathData="M54,19A35,35 0,1 0,54 89A35,35 0,1 0,54 19" android:fillAlpha="0.10"/>
+
+    <!-- Scanner lid -->
+    <path android:fillColor="#26384D" android:pathData="M22,29 L84,29 L78,46 L28,46 Z"/>
+    <path android:fillColor="#8BE7FF" android:pathData="M25,31 L81,31 L79,34 L24,34 Z" android:fillAlpha="0.9"/>
+
+    <!-- USB symbol on lid -->
+    <path android:fillColor="#FFFFFF" android:pathData="M54,32 L54,40 L61,40 L58,37 L60,35 L66,41 L60,47 L58,45 L61,42 L52,42 L52,36 L49,36 L49,39 L46,36 L49,33 L52,36 L52,32 Z"/>
+
+    <!-- Scanner base -->
+    <path android:fillColor="#101D2D" android:pathData="M17,46 Q17,43 21,43 L87,43 Q91,43 91,47 L91,71 Q91,78 84,80 L24,80 Q17,78 17,71 Z"/>
+    <path android:fillColor="#31465C" android:pathData="M21,47 L87,47 L87,63 L21,63 Z"/>
+
+    <!-- Blue scan bed -->
+    <path android:fillColor="#0797E8" android:pathData="M27,49 L81,49 L81,61 L27,61 Z" android:fillAlpha="0.85"/>
+    <path android:fillColor="#F7FBFF" android:pathData="M37,49 L70,49 L70,59 L37,59 Z"/>
+    <path android:fillColor="#1A3550" android:pathData="M41,52 L47,52 L47,54 L41,54 Z M41,56 L63,56 L63,57.5 L41,57.5 Z"/>
+
+    <!-- Front panel -->
+    <path android:fillColor="#17283B" android:pathData="M27,65 L81,65 L81,75 L27,75 Z"/>
+    <path android:fillColor="#22C7FF" android:pathData="M39,67A4,4 0,1 0,39 75A4,4 0,1 0,39 67" android:fillAlpha="0.25"/>
+    <path android:fillColor="#55D8FF" android:pathData="M39,68.5A2.5,2.5 0,1 0,39 73.5A2.5,2.5 0,1 0,39 68.5"/>
+    <path android:fillColor="#DDF8FF" android:pathData="M39,69.5 L40,71 L42,71 L40.5,72.2 L41,74 L39,73 L37,74 L37.5,72.2 L36,71 L38,71 Z"/>
+
+    <!-- Document scan button -->
+    <path android:fillColor="#DDEBFA" android:pathData="M68,68 L75,68 L75,73 L68,73 Z"/>
+    <path android:fillColor="#2C79B8" android:pathData="M69,69 L74,69 L74,70 L69,70 Z M69,71 L73,71 L73,72 L69,72 Z"/>
+
+    <!-- USB cable -->
+    <path android:fillColor="#0C1725" android:pathData="M84,72 C91,72 91,86 98,86 L101,86 L101,90 L97,90 C88,90 88,77 84,77 Z"/>
+    <path android:fillColor="#1B2E43" android:pathData="M96,83 L103,83 L103,91 L96,91 Z"/>
+    <path android:fillColor="#22C7FF" android:pathData="M98,85 L101,85 L101,89 L98,89 Z"/>
+
+</vector>
