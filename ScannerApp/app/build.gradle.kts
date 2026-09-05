@@ -6,6 +6,9 @@ plugins {
 android {
     namespace = "com.indianequipments.usbscanner"
     compileSdk = 35
+    buildFeatures {
+        buildConfig = true
+    }
     defaultConfig {
         applicationId = "com.indianequipments.usbscanner"
         minSdk = 26
